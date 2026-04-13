@@ -1,0 +1,91 @@
+# ------------------------------
+# Dependencies
+# ------------------------------
+node_modules/
+.pnpm-store/
+
+# ------------------------------
+# Environment variables
+# ------------------------------
+.env
+.env.*
+!.env.example
+
+# ------------------------------
+# Logs
+# ------------------------------
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ------------------------------
+# Build / Output
+# ------------------------------
+dist/
+build/
+out/
+
+# ------------------------------
+# Prisma
+# ------------------------------
+# Prisma generates client (keep it tracked usually)
+# But ignore engines & local artifacts if needed
+prisma/*.db
+prisma/*.sqlite
+prisma/dev.db
+
+# ------------------------------
+# Database
+# ------------------------------
+*.sqlite
+*.sqlite3
+*.db
+
+# ------------------------------
+# Cache / Temp
+# ------------------------------
+.cache/
+.tmp/
+.temp/
+*.cache
+
+# ------------------------------
+# Coverage
+# ------------------------------
+coverage/
+
+# ------------------------------
+# OS files
+# ------------------------------
+.DS_Store
+Thumbs.db
+
+# ------------------------------
+# IDE / Editor
+# ------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ------------------------------
+# Runtime
+# ------------------------------
+pids/
+*.pid
+*.pid.lock
+
+# ------------------------------
+# Misc
+# ------------------------------
+*.tgz
+*.bak
+*.old
+
+# ------------------------------
+# Docker (optional)
+# ------------------------------
+docker-compose.override.yml
