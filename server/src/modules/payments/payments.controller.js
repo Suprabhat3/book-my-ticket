@@ -16,6 +16,33 @@ export const completePayment = asyncHandler(async (req, res) => {
   });
 });
 
+export const createRazorpayOrder = asyncHandler(async (req, res) => {
+  const order = await paymentsService.createRazorpayOrder({
+    bookingId: req.validated.params.bookingId,
+    requestUser: req.user,
+  });
+
+  return sendSuccess(res, {
+    message: "Razorpay order created successfully",
+    data: order,
+  });
+});
+
+export const verifyRazorpayPayment = asyncHandler(async (req, res) => {
+  const booking = await paymentsService.verifyRazorpayPayment({
+    bookingId: req.validated.params.bookingId,
+    requestUser: req.user,
+    razorpayOrderId: req.validated.body.razorpayOrderId,
+    razorpayPaymentId: req.validated.body.razorpayPaymentId,
+    razorpaySignature: req.validated.body.razorpaySignature,
+  });
+
+  return sendSuccess(res, {
+    message: "Razorpay payment verified successfully",
+    data: booking,
+  });
+});
+
 export const listPayments = asyncHandler(async (req, res) => {
   const payments = await paymentsService.listPayments(req.user);
 

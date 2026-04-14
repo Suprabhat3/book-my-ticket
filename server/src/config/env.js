@@ -15,6 +15,8 @@ export const env = {
   imagekitPublicKey: process.env.IMAGEKIT_PUBLIC_KEY || "",
   imagekitPrivateKey: process.env.IMAGEKIT_PRIVATE_KEY || "",
   imagekitUrlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || "",
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID || "",
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || "",
 };
 
 const requiredKeys = ["databaseUrl", "jwtAccessSecret", "jwtRefreshSecret"];

@@ -49,25 +49,25 @@ export const NavBar = () => {
 
         <div className="hidden md:flex items-center gap-10">
           <Link
-            href="#"
+            href="/"
             className="text-primary border-b-4 border-primary/20 rounded-b-lg font-headline font-bold tracking-tight hover:scale-105 transition-all duration-300"
           >
             Movies
           </Link>
           <Link
-            href="#"
+            href="/"
             className="text-on-surface-variant font-medium font-headline tracking-tight hover:scale-105 hover:text-primary transition-all duration-300"
           >
             Cinemas
           </Link>
           <Link
-            href="#"
+            href="/"
             className="text-on-surface-variant font-medium font-headline tracking-tight hover:scale-105 hover:text-primary transition-all duration-300"
           >
             Offers
           </Link>
           <Link
-            href="#"
+            href="/bookings"
             className="text-on-surface-variant font-medium font-headline tracking-tight hover:scale-105 hover:text-primary transition-all duration-300"
           >
             My Bookings

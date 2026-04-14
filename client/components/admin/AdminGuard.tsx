@@ -3,7 +3,8 @@
 import { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AuthUser, getStoredUser } from "@/lib/auth-storage";
+import { ApiError, refreshAccessToken } from "@/lib/api";
+import { AuthUser, clearAuthSession, getAccessToken, getStoredUser, setAccessToken } from "@/lib/auth-storage";
 
 type AdminGuardProps = {
   children: ReactNode;
@@ -16,15 +17,52 @@ export function AdminGuard({ children }: AdminGuardProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    const sessionUser = getStoredUser();
-    setUser(sessionUser);
+    const ensureAdminSession = async () => {
+      const sessionUser = getStoredUser();
+      const token = getAccessToken();
 
-    if (!sessionUser) {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-      return;
-    }
+      if (!sessionUser || !token) {
+        clearAuthSession();
+        router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+        return;
+      }
 
-    setIsChecking(false);
+      try {
+        const meResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api/v1"}/auth/me`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            credentials: "include",
+            cache: "no-store",
+          },
+        );
+
+        if (meResponse.status === 401) {
+          const nextToken = await refreshAccessToken();
+          setAccessToken(nextToken);
+        } else if (!meResponse.ok) {
+          throw new ApiError("Unable to validate session");
+        }
+
+        setUser(sessionUser);
+        setIsChecking(false);
+      } catch (error) {
+        const isApiError = error instanceof ApiError;
+        if (isApiError) {
+          clearAuthSession();
+          router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+          return;
+        }
+
+        clearAuthSession();
+        router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      }
+    };
+
+    void ensureAdminSession();
   }, [pathname, router]);
 
   if (isChecking) {
