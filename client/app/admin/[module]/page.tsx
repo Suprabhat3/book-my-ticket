@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
-import { createModuleItem, fetchModuleItems } from "@/lib/admin-api";
+import { createModuleItem, fetchModuleItems, updateModuleItem } from "@/lib/admin-api";
 import { AdminModuleKey, getAdminModuleByKey } from "@/lib/admin-modules";
 import { getAccessToken } from "@/lib/auth-storage";
 import { uploadMoviePosterToImageKit } from "@/lib/imagekit-upload";
@@ -123,6 +123,8 @@ export default function AdminModulePage() {
   const [showAssignments, setShowAssignments] = useState<ShowAssignment[]>([
     { theaterId: "", screenId: "" },
   ]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -417,20 +419,33 @@ export default function AdminModulePage() {
         }
 
         const token = getAccessToken();
-        await Promise.all(
-          showAssignments.map((assignment) =>
-            createModuleItem("shows", token, {
-              movieId: normalizeFormValue("movieId", movieId),
-              theaterId: normalizeFormValue("theaterId", assignment.theaterId),
-              screenId: normalizeFormValue("screenId", assignment.screenId),
-              startTime: normalizeFormValue("startTime", startTime),
-              endTime: normalizeFormValue("endTime", endTime),
-              basePrice: normalizeFormValue("basePrice", basePrice),
-            }),
-          ),
-        );
+        if (editingItemId) {
+          const assignment = showAssignments[0];
+          await updateModuleItem("shows", editingItemId, token, {
+            movieId: normalizeFormValue("movieId", movieId),
+            theaterId: normalizeFormValue("theaterId", assignment.theaterId),
+            screenId: normalizeFormValue("screenId", assignment.screenId),
+            startTime: normalizeFormValue("startTime", startTime),
+            endTime: normalizeFormValue("endTime", endTime),
+            basePrice: normalizeFormValue("basePrice", basePrice),
+          });
+          setSuccessMessage("Show updated successfully.");
+        } else {
+          await Promise.all(
+            showAssignments.map((assignment) =>
+              createModuleItem("shows", token, {
+                movieId: normalizeFormValue("movieId", movieId),
+                theaterId: normalizeFormValue("theaterId", assignment.theaterId),
+                screenId: normalizeFormValue("screenId", assignment.screenId),
+                startTime: normalizeFormValue("startTime", startTime),
+                endTime: normalizeFormValue("endTime", endTime),
+                basePrice: normalizeFormValue("basePrice", basePrice),
+              }),
+            ),
+          );
+          setSuccessMessage("Shows created successfully for selected theater/screen entries.");
+        }
 
-        setSuccessMessage("Shows created successfully for selected theater/screen entries.");
         setFormState((previous) => ({
           ...previous,
           movieId: "",
@@ -440,6 +455,8 @@ export default function AdminModulePage() {
         }));
         setShowAssignments([{ theaterId: "", screenId: "" }]);
         await loadItems();
+        setShowForm(false);
+        setEditingItemId(null);
         return;
       }
 
@@ -507,8 +524,13 @@ export default function AdminModulePage() {
           payload.posterHorizontalImagekitFileId = posterHorizontalImagekitFileId;
         }
 
-        await createModuleItem(moduleConfig.key, token, payload);
-        setSuccessMessage("Movie created successfully.");
+        if (editingItemId) {
+          await updateModuleItem(moduleConfig.key, editingItemId, token, payload);
+          setSuccessMessage("Movie updated successfully.");
+        } else {
+          await createModuleItem(moduleConfig.key, token, payload);
+          setSuccessMessage("Movie created successfully.");
+        }
 
         const reset = Object.fromEntries(moduleConfig.fields.map((field) => [field.key, ""]));
         setFormState({
@@ -521,6 +543,8 @@ export default function AdminModulePage() {
         setSelectedPosterFiles({ vertical: null, horizontal: null });
         clearPosterPreviews();
         await loadItems();
+        setShowForm(false);
+        setEditingItemId(null);
         return;
       }
 
@@ -534,19 +558,86 @@ export default function AdminModulePage() {
       }
 
       const token = getAccessToken();
-      await createModuleItem(moduleConfig.key, token, payload);
-      setSuccessMessage(`${moduleConfig.label.slice(0, -1)} created successfully.`);
+      if (editingItemId) {
+        await updateModuleItem(moduleConfig.key, editingItemId, token, payload);
+        setSuccessMessage(`${moduleConfig.label.slice(0, -1)} updated successfully.`);
+      } else {
+        await createModuleItem(moduleConfig.key, token, payload);
+        setSuccessMessage(`${moduleConfig.label.slice(0, -1)} created successfully.`);
+      }
 
       const reset = Object.fromEntries(moduleConfig.fields.map((field) => [field.key, ""]));
       setFormState(reset);
       setSelectedScreenCityId("");
       await loadItems();
+      setShowForm(false);
+      setEditingItemId(null);
     } catch (submitError) {
       const message = submitError instanceof Error ? submitError.message : "Failed to create item.";
       setError(message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEditRequest = (item: ItemRecord) => {
+    if (!moduleConfig) return;
+    setEditingItemId(item.id as string | number);
+    setError("");
+    setSuccessMessage("");
+
+    const stateToSet: Record<string, string> = {};
+    for (const field of moduleConfig.fields) {
+      if (field.key in item && item[field.key] !== null && item[field.key] !== undefined) {
+        let val = String(item[field.key]);
+        if (field.type === "datetime-local" && val.includes("T")) {
+          const dateObj = new Date(val);
+          if (!isNaN(dateObj.getTime())) {
+            dateObj.setMinutes(dateObj.getMinutes() - dateObj.getTimezoneOffset());
+            val = dateObj.toISOString().slice(0, 16);
+          }
+        }
+        stateToSet[field.key] = val;
+      } else {
+        stateToSet[field.key] = "";
+      }
+    }
+
+    if (moduleKey === "movies") {
+      stateToSet.posterVerticalUrl = (item.posterVerticalUrl as string) || "";
+      stateToSet.posterHorizontalUrl = (item.posterHorizontalUrl as string) || "";
+      stateToSet.posterVerticalImagekitFileId = (item.posterVerticalImagekitFileId as string) || "";
+      stateToSet.posterHorizontalImagekitFileId = (item.posterHorizontalImagekitFileId as string) || "";
+      if (stateToSet.posterVerticalUrl) setPosterPreviewUrl("vertical", stateToSet.posterVerticalUrl);
+      if (stateToSet.posterHorizontalUrl) setPosterPreviewUrl("horizontal", stateToSet.posterHorizontalUrl);
+    }
+
+    if (moduleKey === "shows") {
+      setShowAssignments([
+        { theaterId: String(item.theaterId || ""), screenId: String(item.screenId || "") },
+      ]);
+    }
+
+    if (moduleKey === "screens" || moduleKey === "shows") {
+      const theater = theaterOptions.find(t => t.id === Number(item.theaterId));
+      if (theater) {
+        setSelectedScreenCityId(String(theater.cityId));
+      }
+    }
+
+    setFormState(stateToSet);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingItemId(null);
+    setShowForm(false);
+    const reset = Object.fromEntries(moduleConfig?.fields.map((field) => [field.key, ""]) || []);
+    setFormState(reset);
+    clearPosterPreviews();
+    setSelectedScreenCityId("");
+    setShowAssignments([{ theaterId: "", screenId: "" }]);
   };
 
   if (!moduleConfig) {
@@ -574,21 +665,44 @@ export default function AdminModulePage() {
 
   return (
     <div className="space-y-8">
+      {successMessage && !showForm ? (
+        <div className="bg-green-100 border border-green-200 text-green-800 px-4 py-3 rounded-xl text-sm font-semibold">
+          {successMessage}
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-headline font-bold text-on-surface">{moduleConfig.label}</h2>
           <p className="text-on-surface-variant mt-1">{moduleConfig.description}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadItems()}
-          className="clay-button-secondary px-4 py-2 rounded-xl text-sm font-bold"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void loadItems()}
+            className="clay-button-secondary px-4 py-2 rounded-xl text-sm font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            Refresh
+          </button>
+          {moduleConfig.createEnabled && (
+            <button
+              type="button"
+              onClick={() => {
+                if (showForm) {
+                  handleCancelEdit();
+                } else {
+                  setShowForm(true);
+                }
+              }}
+              className="clay-button-primary px-4 py-2 rounded-xl text-sm font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              {showForm ? "Back to List" : `Create ${moduleConfig.label.slice(0, -1)}`}
+            </button>
+          )}
+        </div>
       </div>
 
-      {moduleConfig.createEnabled ? (
+      {showForm && moduleConfig.createEnabled ? (
         <form className="clay-inset rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleCreate}>
           {isShowsModule ? (
             <>
@@ -909,7 +1023,7 @@ export default function AdminModulePage() {
               disabled={isSubmitting || isAnyPosterUploading}
               className="clay-button-primary px-6 py-3 rounded-xl font-bold disabled:opacity-70"
             >
-              {isSubmitting ? "Saving..." : isAnyPosterUploading ? "Uploading images..." : `Create ${moduleConfig.label.slice(0, -1)}`}
+              {isSubmitting ? "Saving..." : isAnyPosterUploading ? "Uploading images..." : editingItemId ? `Update ${moduleConfig.label.slice(0, -1)}` : `Create ${moduleConfig.label.slice(0, -1)}`}
             </button>
             {successMessage ? <span className="text-sm text-green-700 font-semibold">{successMessage}</span> : null}
           </div>
@@ -918,49 +1032,72 @@ export default function AdminModulePage() {
 
       {error ? <p className="text-sm font-semibold text-red-500">{error}</p> : null}
 
-      <section className="space-y-3">
-        <h3 className="text-lg font-bold text-on-surface">Existing {moduleConfig.label}</h3>
-        {isLoading ? (
-          <p className="text-on-surface-variant">Loading records...</p>
-        ) : items.length === 0 ? (
-          <p className="text-on-surface-variant">No records found yet.</p>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {items.map((item, index) => {
-              const record = (item as ItemRecord) || {};
-              const preferredFields = moduleFieldMap[moduleConfig.key];
-              const fields = preferredFields.filter((field) => field in record);
+      {!showForm ? (
+        <section className="space-y-4">
+          {isLoading ? (
+            <p className="text-on-surface-variant">Loading records...</p>
+          ) : items.length === 0 ? (
+            <p className="text-on-surface-variant">No records found yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {items.map((item, index) => {
+                const record = (item as ItemRecord) || {};
+                const preferredFields = moduleFieldMap[moduleConfig.key];
+                const fields = preferredFields.filter((field) => field in record);
 
-              return (
-                <div key={index} className="clay-inset rounded-xl p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h4 className="font-bold text-on-surface">{getPrimaryLabel(record)}</h4>
-                    {"isActive" in record ? (
-                      <span
-                        className={`text-xs font-bold px-2 py-1 rounded-full ${
-                          record.isActive ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-700"
-                        }`}
-                      >
-                        {record.isActive ? "Active" : "Inactive"}
-                      </span>
-                    ) : null}
-                  </div>
+                const textFields = fields.filter((f) => f !== "posterVerticalUrl" && f !== "posterHorizontalUrl");
+                const mediaFields = fields.filter((f) => f === "posterVerticalUrl" || f === "posterHorizontalUrl");
 
-                  <dl className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {fields.map((field) => (
-                      <div key={field} className="bg-surface-container-low rounded-lg px-3 py-2">
-                        <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
-                          {toTitleCase(field)}
-                        </dt>
-                        {moduleKey === "movies" &&
-                        (field === "posterVerticalUrl" || field === "posterHorizontalUrl") &&
-                        typeof record[field] === "string" &&
-                        record[field] ? (
-                          <dd className="mt-2">
+                return (
+                  <div 
+                    key={index} 
+                    className="clay-inset rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[8px_8px_16px_#c3c3c3,-8px_-8px_16px_#fdfdfd] hover:bg-surface-container-low group flex flex-col gap-4"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-surface-container-high/60 pb-3">
+                      <div className="flex items-center gap-3">
+                        <h4 className="font-bold text-on-surface">{getPrimaryLabel(record)}</h4>
+                        {"isActive" in record ? (
+                          <span
+                            className={`text-xs font-bold px-2 py-1 rounded-full ${
+                              record.isActive ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-700"
+                            }`}
+                          >
+                            {record.isActive ? "Active" : "Inactive"}
+                          </span>
+                        ) : null}
+                      </div>
+                      {moduleConfig.createEnabled && (
+                        <button
+                          onClick={() => handleEditRequest(record)}
+                          className="text-primary hover:bg-primary/10 px-3 py-1 rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+
+                    <dl className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {textFields.map((field) => (
+                        <div key={field} className="bg-surface-container-low rounded-lg px-3 py-2 self-start">
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                            {toTitleCase(field)}
+                          </dt>
+                          <dd className="text-sm font-medium text-on-surface mt-1">{formatValue(record[field])}</dd>
+                        </div>
+                      ))}
+                    </dl>
+
+                    {mediaFields.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-surface-container-high/60">
+                        {mediaFields.map((field) => (
+                          <div key={field} className="flex flex-col gap-2">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                              {field === "posterVerticalUrl" ? "Vertical Poster" : "Horizontal Poster"}
+                            </span>
                             <div
                               className={`overflow-hidden rounded-lg border border-surface-container-high bg-surface ${
-                                field === "posterVerticalUrl" ? "aspect-2/3" : "aspect-video"
-                              }`}
+                                field === "posterVerticalUrl" ? "w-32 sm:w-40 aspect-2/3" : "w-full aspect-video"
+                              } self-start`}
                             >
                               <img
                                 src={record[field] as string}
@@ -968,19 +1105,17 @@ export default function AdminModulePage() {
                                 className="w-full h-full object-cover"
                               />
                             </div>
-                          </dd>
-                        ) : (
-                          <dd className="text-sm font-medium text-on-surface">{formatValue(record[field])}</dd>
-                        )}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </dl>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

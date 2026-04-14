@@ -129,6 +129,28 @@ export async function createModuleItem(
   return payload.data;
 }
 
+export async function updateModuleItem(
+  moduleKey: AdminModuleKey,
+  itemId: string | number,
+  accessToken: string | null,
+  body: Record<string, unknown>,
+) {
+  const moduleConfig = getAdminModuleByKey(moduleKey);
+  if (!moduleConfig) {
+    throw new ApiError("Unknown admin module");
+  }
+
+  const response = await requestWithAutoRefresh(`${API_BASE_URL}${moduleConfig.path}/${itemId}`, {
+    method: "PUT",
+    headers: buildHeaders(accessToken),
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+
+  const payload = await parseBackendResponse<unknown>(response);
+  return payload.data;
+}
+
 export async function fetchMovieUploadAuth(accessToken: string | null) {
   const response = await requestWithAutoRefresh(`${API_BASE_URL}/movies/upload-auth`, {
     method: "GET",

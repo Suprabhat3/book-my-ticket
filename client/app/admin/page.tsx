@@ -57,7 +57,7 @@ export default function AdminDashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {ADMIN_MODULES.map((moduleConfig) => (
-          <article key={moduleConfig.key} className="clay-inset rounded-xl p-5 flex flex-col gap-3">
+          <article key={moduleConfig.key} className="clay-inset rounded-xl p-5 flex flex-col gap-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[8px_8px_16px_#c3c3c3,-8px_-8px_16px_#fdfdfd]">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-on-surface">{moduleConfig.label}</h3>
               <span className="text-xs font-bold px-2 py-1 rounded-full bg-surface-container-low text-on-surface-variant">

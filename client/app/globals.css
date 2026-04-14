@@ -47,6 +47,7 @@
   }
   
   .clay-button-primary {
+    color: var(--color-on-primary);
     background: linear-gradient(145deg, #b7131a, #a40010);
     box-shadow: 
       0px 10px 20px rgba(183, 19, 26, 0.3),
