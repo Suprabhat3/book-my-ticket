@@ -72,7 +72,6 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
       },
       { key: "totalRows", label: "Total Rows", type: "number", placeholder: "12" },
       { key: "totalCols", label: "Total Columns", type: "number", placeholder: "18" },
-      { key: "seatCapacity", label: "Seat Capacity", type: "number", placeholder: "216" },
     ],
   },
   {

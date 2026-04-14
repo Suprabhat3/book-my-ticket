@@ -557,6 +557,12 @@ export default function AdminModulePage() {
         payload[field.key] = normalizeFormValue(field.key, value);
       }
 
+      if (moduleKey === "screens") {
+        const rows = Number(payload.totalRows) || 0;
+        const cols = Number(payload.totalCols) || 0;
+        payload.seatCapacity = rows * cols;
+      }
+
       const token = getAccessToken();
       if (editingItemId) {
         await updateModuleItem(moduleConfig.key, editingItemId, token, payload);
@@ -656,6 +662,7 @@ export default function AdminModulePage() {
     moduleKey === "screens" && selectedScreenCityId
       ? theaterOptions.filter((theater) => String(theater.cityId) === selectedScreenCityId)
       : [];
+  const isScreensModule = moduleKey === "screens";
   const isShowsModule = moduleKey === "shows";
   const isMoviesModule = moduleKey === "movies";
   const isAnyPosterUploading = uploadingPosters.vertical || uploadingPosters.horizontal;
@@ -936,6 +943,53 @@ export default function AdminModulePage() {
             </div>
           ))
           )}
+
+          {isScreensModule ? (
+            <div className="md:col-span-2 mt-4 space-y-4 border-t border-surface-container-high/60 pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h4 className="text-sm font-bold text-on-surface">Screen Layout Preview</h4>
+                  <p className="text-xs text-on-surface-variant">Configure rows and columns to generate the screen seating manifest.</p>
+                </div>
+                <div className="text-xs font-bold px-3 py-1 bg-primary/10 text-primary rounded-full">
+                  Capacity: {(Number(formState.totalRows) || 0) * (Number(formState.totalCols) || 0)} seats
+                </div>
+              </div>
+              <div className="bg-surface-container-low rounded-xl p-6 overflow-auto border border-surface-container-high flex flex-col items-center min-h-[160px] justify-center">
+                <div className="w-2/3 h-6 bg-blue-300 rounded-t-full mb-10 shadow-sm flex items-center justify-center relative">
+                   <span className="text-[10px] font-bold text-blue-900 absolute tracking-widest">SCREEN</span>
+                </div>
+                {Number(formState.totalRows) > 0 && Number(formState.totalCols) > 0 ? (
+                  <div 
+                    className="grid gap-1.5 sm:gap-2 mb-4"
+                    style={{
+                      gridTemplateColumns: `repeat(${Math.min(Number(formState.totalCols) || 0, 50)}, minmax(0, 1fr))`
+                    }}
+                  >
+                    {Array.from({ length: Math.min(Number(formState.totalRows) || 0, 50) }).map((_, r) => (
+                      Array.from({ length: Math.min(Number(formState.totalCols) || 0, 50) }).map((_, c) => (
+                        <div 
+                          key={`${r}-${c}`} 
+                          className="w-3 h-3 sm:w-5 sm:h-5 rounded-t-lg rounded-b-sm bg-primary/80 border border-primary/20 shadow-sm transition-transform hover:scale-125 hover:bg-primary cursor-pointer"
+                          title={`Row ${r+1}, Col ${c+1}`}
+                        />
+                      ))
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-on-surface-variant my-4">
+                    <span className="font-semibold">Enter screen dimensions</span>
+                    <span className="text-xs">e.g. 10 rows × 20 columns</span>
+                  </div>
+                )}
+                {((Number(formState.totalRows) || 0) > 50 || (Number(formState.totalCols) || 0) > 50) && (
+                   <div className="text-center text-xs text-on-surface-variant mt-2 max-w-sm">
+                     Preview visually capped at 50x50 to prevent browser slowdowns. Actual capacity ({(Number(formState.totalRows) || 0) * (Number(formState.totalCols) || 0)} seats) will be safely saved in database.
+                   </div>
+                )}
+              </div>
+            </div>
+          ) : null}
 
           {isMoviesModule ? (
             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
