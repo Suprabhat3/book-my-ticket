@@ -47,9 +47,19 @@ export const NavBar = () => {
               type="text"
             />
           </div>
-          <button className="material-symbols-outlined text-on-surface text-3xl hover:scale-110 active:scale-90 transition-all">
-            account_circle
-          </button>
+          <div className="flex items-center gap-4">
+            <Link href="/register">
+              <button className="hidden sm:block clay-button-secondary px-6 py-2 rounded-full font-bold text-sm hover:scale-105 active:scale-95 transition-all">
+                Sign Up
+              </button>
+            </Link>
+            <Link 
+              href="/login" 
+              className="material-symbols-outlined text-on-surface text-3xl hover:scale-110 active:scale-90 transition-all cursor-pointer"
+            >
+              account_circle
+            </Link>
+          </div>
         </div>
       </div>
     </nav>
