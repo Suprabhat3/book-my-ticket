@@ -1,12 +1,50 @@
-import React from "react";
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { logoutUser } from "@/lib/api";
+import { clearAuthSession, getAccessToken, getStoredUser } from "@/lib/auth-storage";
+
+type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: "ADMIN" | "USER";
+};
 
 export const NavBar = () => {
+  const router = useRouter();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      const token = getAccessToken();
+      if (token) {
+        await logoutUser(token);
+      }
+    } catch {
+      // Even if API logout fails, clear local session to keep UX clean.
+    } finally {
+      clearAuthSession();
+      setUser(null);
+      setIsLoggingOut(false);
+      router.push("/");
+      router.refresh();
+    }
+  };
+
   return (
     <nav className="sticky top-0 z-50 w-full bg-surface/70 backdrop-blur-xl transition-all duration-300">
       <div className="flex justify-between items-center px-8 py-4 max-w-screen-2xl mx-auto">
         <div className="text-2xl font-black text-primary italic font-headline tracking-tight">
-          Book Suprabhat's Ticket
+          Book Suprabhat&apos;s Ticket
         </div>
 
         <div className="hidden md:flex items-center gap-10">
@@ -48,17 +86,36 @@ export const NavBar = () => {
             />
           </div>
           <div className="flex items-center gap-4">
-            <Link href="/register">
-              <button className="hidden sm:block clay-button-secondary px-6 py-2 rounded-full font-bold text-sm hover:scale-105 active:scale-95 transition-all">
-                Sign Up
-              </button>
-            </Link>
-            <Link 
-              href="/login" 
-              className="material-symbols-outlined text-on-surface text-3xl hover:scale-110 active:scale-90 transition-all cursor-pointer"
-            >
-              account_circle
-            </Link>
+            {user ? (
+              <>
+                <div className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-full bg-surface-container-low clay-inset">
+                  <span className="material-symbols-outlined text-on-surface text-2xl">account_circle</span>
+                  <span className="text-sm font-semibold text-on-surface">{user.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="clay-button-secondary px-6 py-2 rounded-full font-bold text-sm hover:scale-105 active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isLoggingOut ? "Logging out..." : "Logout"}
+                </button>
+              </>
+            ) : (
+              <>
+                <Link href="/register">
+                  <button className="hidden sm:block clay-button-secondary px-6 py-2 rounded-full font-bold text-sm hover:scale-105 active:scale-95 transition-all">
+                    Sign Up
+                  </button>
+                </Link>
+                <Link
+                  href="/login"
+                  className="material-symbols-outlined text-on-surface text-3xl hover:scale-110 active:scale-90 transition-all cursor-pointer"
+                >
+                  account_circle
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
