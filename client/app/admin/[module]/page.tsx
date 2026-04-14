@@ -12,6 +12,9 @@ type ListState = unknown[];
 type ItemRecord = Record<string, unknown>;
 type CityOption = { id: number; name: string };
 type TheaterOption = { id: number; name: string; cityId: number };
+type ScreenOption = { id: number; name: string; theaterId: number };
+type MovieOption = { id: number; title: string };
+type ShowAssignment = { theaterId: string; screenId: string };
 
 function normalizeFormValue(key: string, value: string): unknown {
   const numberFields = new Set([
@@ -92,6 +95,11 @@ export default function AdminModulePage() {
   const [cityOptions, setCityOptions] = useState<CityOption[]>([]);
   const [theaterOptions, setTheaterOptions] = useState<TheaterOption[]>([]);
   const [selectedScreenCityId, setSelectedScreenCityId] = useState("");
+  const [screenOptions, setScreenOptions] = useState<ScreenOption[]>([]);
+  const [movieOptions, setMovieOptions] = useState<MovieOption[]>([]);
+  const [showAssignments, setShowAssignments] = useState<ShowAssignment[]>([
+    { theaterId: "", screenId: "" },
+  ]);
 
   useEffect(() => {
     if (!moduleConfig) return;
@@ -133,7 +141,7 @@ export default function AdminModulePage() {
 
   useEffect(() => {
     const loadTheaterOptions = async () => {
-      if (moduleKey !== "screens") return;
+      if (moduleKey !== "screens" && moduleKey !== "shows") return;
 
       try {
         const token = getAccessToken();
@@ -165,6 +173,76 @@ export default function AdminModulePage() {
     };
 
     void loadTheaterOptions();
+  }, [moduleKey]);
+
+  useEffect(() => {
+    const loadScreenOptions = async () => {
+      if (moduleKey !== "shows") return;
+
+      try {
+        const token = getAccessToken();
+        const data = await fetchModuleItems("screens", token);
+        if (!Array.isArray(data)) {
+          setScreenOptions([]);
+          return;
+        }
+
+        const mapped = data
+          .map((screen) => screen as ItemRecord)
+          .filter(
+            (screen) =>
+              typeof screen.id === "number" &&
+              typeof screen.name === "string" &&
+              typeof screen.theaterId === "number" &&
+              (screen.isActive === undefined || screen.isActive === true),
+          )
+          .map((screen) => ({
+            id: screen.id as number,
+            name: screen.name as string,
+            theaterId: screen.theaterId as number,
+          }));
+
+        setScreenOptions(mapped);
+      } catch {
+        setScreenOptions([]);
+      }
+    };
+
+    void loadScreenOptions();
+  }, [moduleKey]);
+
+  useEffect(() => {
+    const loadMovieOptions = async () => {
+      if (moduleKey !== "shows") return;
+
+      try {
+        const token = getAccessToken();
+        const data = await fetchModuleItems("movies", token);
+        if (!Array.isArray(data)) {
+          setMovieOptions([]);
+          return;
+        }
+
+        const mapped = data
+          .map((movie) => movie as ItemRecord)
+          .filter(
+            (movie) =>
+              typeof movie.id === "number" &&
+              typeof movie.title === "string" &&
+              (movie.isActive === undefined || movie.isActive === true),
+          )
+          .map((movie) => ({
+            id: movie.id as number,
+            title: movie.title as string,
+          }));
+
+        setMovieOptions(mapped);
+      } catch {
+        setMovieOptions([]);
+      }
+    };
+
+    void loadMovieOptions();
   }, [moduleKey]);
 
   const loadItems = async () => {
@@ -205,6 +283,60 @@ export default function AdminModulePage() {
       setError("");
       setSuccessMessage("");
       setIsSubmitting(true);
+
+      if (moduleKey === "shows") {
+        const movieId = (formState.movieId || "").trim();
+        const startTime = (formState.startTime || "").trim();
+        const endTime = (formState.endTime || "").trim();
+        const basePrice = (formState.basePrice || "").trim();
+
+        if (!movieId || !startTime || !endTime || !basePrice) {
+          throw new ApiError("Movie, start time, end time, and base price are required.");
+        }
+
+        if (showAssignments.length === 0) {
+          throw new ApiError("Add at least one theater/screen entry.");
+        }
+
+        const uniqueCheck = new Set<string>();
+        for (const assignment of showAssignments) {
+          if (!assignment.theaterId || !assignment.screenId) {
+            throw new ApiError("Each row must have theater and screen selected.");
+          }
+
+          const key = `${assignment.theaterId}-${assignment.screenId}`;
+          if (uniqueCheck.has(key)) {
+            throw new ApiError("Duplicate theater/screen pair selected.");
+          }
+          uniqueCheck.add(key);
+        }
+
+        const token = getAccessToken();
+        await Promise.all(
+          showAssignments.map((assignment) =>
+            createModuleItem("shows", token, {
+              movieId: normalizeFormValue("movieId", movieId),
+              theaterId: normalizeFormValue("theaterId", assignment.theaterId),
+              screenId: normalizeFormValue("screenId", assignment.screenId),
+              startTime: normalizeFormValue("startTime", startTime),
+              endTime: normalizeFormValue("endTime", endTime),
+              basePrice: normalizeFormValue("basePrice", basePrice),
+            }),
+          ),
+        );
+
+        setSuccessMessage("Shows created successfully for selected theater/screen entries.");
+        setFormState((previous) => ({
+          ...previous,
+          movieId: "",
+          startTime: "",
+          endTime: "",
+          basePrice: "",
+        }));
+        setShowAssignments([{ theaterId: "", screenId: "" }]);
+        await loadItems();
+        return;
+      }
 
       const payload: Record<string, unknown> = {};
       for (const field of moduleConfig.fields) {
@@ -247,6 +379,10 @@ export default function AdminModulePage() {
     moduleKey === "screens" && selectedScreenCityId
       ? theaterOptions.filter((theater) => String(theater.cityId) === selectedScreenCityId)
       : [];
+  const isShowsModule = moduleKey === "shows";
+
+  const getScreensByTheater = (theaterId: string) =>
+    screenOptions.filter((screen) => String(screen.theaterId) === theaterId);
 
   return (
     <div className="space-y-8">
@@ -266,7 +402,145 @@ export default function AdminModulePage() {
 
       {moduleConfig.createEnabled ? (
         <form className="clay-inset rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleCreate}>
-          {moduleConfig.fields.map((field) => (
+          {isShowsModule ? (
+            <>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-on-surface">Movie</label>
+                <select
+                  value={formState.movieId || ""}
+                  onChange={(event) => handleInputChange("movieId", event.target.value)}
+                  className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+                >
+                  <option value="">Select Movie</option>
+                  {movieOptions.map((movie) => (
+                    <option key={movie.id} value={String(movie.id)}>
+                      {movie.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-on-surface">Base Price</label>
+                <input
+                  type="number"
+                  placeholder="250"
+                  value={formState.basePrice || ""}
+                  onChange={(event) => handleInputChange("basePrice", event.target.value)}
+                  className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-on-surface">Start Time</label>
+                <input
+                  type="datetime-local"
+                  value={formState.startTime || ""}
+                  onChange={(event) => handleInputChange("startTime", event.target.value)}
+                  className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-semibold text-on-surface">End Time</label>
+                <input
+                  type="datetime-local"
+                  value={formState.endTime || ""}
+                  onChange={(event) => handleInputChange("endTime", event.target.value)}
+                  className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+                />
+              </div>
+
+              <div className="md:col-span-2 mt-2">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-on-surface">Theater and Screen Assignments</h4>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowAssignments((previous) => [...previous, { theaterId: "", screenId: "" }])
+                    }
+                    className="clay-button-secondary px-3 py-2 rounded-lg text-xs font-bold"
+                  >
+                    Add Theater/Screen
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {showAssignments.map((assignment, index) => (
+                    <div
+                      key={index}
+                      className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end bg-surface-container-low rounded-xl p-3"
+                    >
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-semibold text-on-surface-variant">Theater</label>
+                        <select
+                          value={assignment.theaterId}
+                          onChange={(event) =>
+                            setShowAssignments((previous) =>
+                              previous.map((row, rowIndex) =>
+                                rowIndex === index
+                                  ? { theaterId: event.target.value, screenId: "" }
+                                  : row,
+                              ),
+                            )
+                          }
+                          className="rounded-lg px-3 py-2 bg-surface border border-surface-container-high outline-none"
+                        >
+                          <option value="">Select Theater</option>
+                          {theaterOptions.map((theater) => (
+                            <option key={theater.id} value={String(theater.id)}>
+                              {theater.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-semibold text-on-surface-variant">Screen</label>
+                        <select
+                          value={assignment.screenId}
+                          onChange={(event) =>
+                            setShowAssignments((previous) =>
+                              previous.map((row, rowIndex) =>
+                                rowIndex === index ? { ...row, screenId: event.target.value } : row,
+                              ),
+                            )
+                          }
+                          disabled={!assignment.theaterId}
+                          className="rounded-lg px-3 py-2 bg-surface border border-surface-container-high outline-none disabled:opacity-60"
+                        >
+                          <option value="">
+                            {assignment.theaterId ? "Select Screen" : "Select Theater First"}
+                          </option>
+                          {getScreensByTheater(assignment.theaterId).map((screen) => (
+                            <option key={screen.id} value={String(screen.id)}>
+                              {screen.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowAssignments((previous) =>
+                            previous.length === 1
+                              ? previous
+                              : previous.filter((_, rowIndex) => rowIndex !== index),
+                          )
+                        }
+                        disabled={showAssignments.length === 1}
+                        className="clay-button-secondary px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-60"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+          moduleConfig.fields.map((field) => (
             <div key={field.key} className="flex flex-col gap-2">
               <label className="text-sm font-semibold text-on-surface">{field.label}</label>
               {field.type === "select" ? (
@@ -358,7 +632,8 @@ export default function AdminModulePage() {
                 </p>
               ) : null}
             </div>
-          ))}
+          ))
+          )}
 
           <div className="md:col-span-2 flex items-center gap-3">
             <button
