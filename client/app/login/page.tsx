@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ApiError, loginUser } from "@/lib/api";
@@ -10,6 +10,7 @@ import { saveAuthSession } from "@/lib/auth-storage";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,7 +33,8 @@ export default function LoginPage() {
       });
 
       saveAuthSession(data.accessToken, data.user);
-      router.push("/");
+      const nextPath = searchParams.get("next");
+      router.push(nextPath || "/");
     } catch (submitError) {
       const message =
         submitError instanceof ApiError ? submitError.message : "Unable to login right now.";

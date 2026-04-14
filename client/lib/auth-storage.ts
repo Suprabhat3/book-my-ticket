@@ -1,7 +1,7 @@
 const ACCESS_TOKEN_KEY = "book_my_ticket_access_token";
 const USER_KEY = "book_my_ticket_user";
 
-type AuthUser = {
+export type AuthUser = {
   id: string;
   name: string;
   email: string;
@@ -12,6 +12,11 @@ export function saveAuthSession(accessToken: string, user: AuthUser) {
   if (typeof window === "undefined") return;
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function setAccessToken(accessToken: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
 }
 
 export function clearAuthSession() {

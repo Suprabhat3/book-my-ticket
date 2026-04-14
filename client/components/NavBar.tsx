@@ -72,6 +72,14 @@ export const NavBar = () => {
           >
             My Bookings
           </Link>
+          {user?.role === "ADMIN" ? (
+            <Link
+              href="/admin"
+              className="text-on-surface-variant font-medium font-headline tracking-tight hover:scale-105 hover:text-primary transition-all duration-300"
+            >
+              Admin
+            </Link>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-6">

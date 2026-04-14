@@ -96,3 +96,17 @@ export async function logoutUser(accessToken: string): Promise<void> {
 
   await parseResponse<null>(response);
 }
+
+export async function refreshAccessToken(): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+
+  const parsed = await parseResponse<{ accessToken: string }>(response);
+  if (!parsed.data?.accessToken) {
+    throw new ApiError("Missing refreshed access token");
+  }
+
+  return parsed.data.accessToken;
+}
