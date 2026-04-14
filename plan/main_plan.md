@@ -3,7 +3,7 @@
 ## 1. Project Goal
 Build a full-stack movie ticket booking platform for a hackathon:
 - Backend: Node.js + Express + PostgreSQL
-- Frontend: React
+- Frontend: Nextjs
 - Roles: `admin`, `user`
 - Payments: Razorpay (test mode first)
 
@@ -32,11 +32,11 @@ Build a full-stack movie ticket booking platform for a hackathon:
 - Password hashing: bcrypt
 - File upload: Multer (local storage initially), optional cloud (Cloudinary/S3)
 - Payments: Razorpay Orders + Payment Verification (signature check)
-- Frontend: React + Vite + React Router + Tailwind CSS
-- State/API: React Query + Axios (or fetch)
+- Frontend: Nextjs + Tailwind CSS
+- State/API: Nextjs Query + Axios (or fetch)
 
 ## 4. High-Level Architecture
-- `client/` -> React app
+- `client/` -> Nextjs app
 - `server/` -> Express API
 - API prefix: `/api/v1`
 - Layering:
@@ -165,7 +165,7 @@ Build a full-stack movie ticket booking platform for a hackathon:
 7. On valid signature, booking -> `paid`, seats -> `booked`
 8. On failure/timeout, booking -> `failed`, locks released
 
-## 8. Frontend Plan (React)
+## 8. Frontend Plan (Nextjs)
 
 ### Public Pages
 - Home (now showing + upcoming)
@@ -221,7 +221,7 @@ Build a full-stack movie ticket booking platform for a hackathon:
 - Booking confirmation + failure handling
 
 ### Milestone 5 - Frontend UI
-- React app screens for user and admin
+- Nextjs app screens for user and admin
 - Responsive and visually polished design
 - Integrate all APIs and payment flow
 

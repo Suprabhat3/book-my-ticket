@@ -3,6 +3,7 @@
 # ------------------------------
 node_modules/
 .pnpm-store/
+.npm/
 
 # ------------------------------
 # Environment variables
@@ -10,6 +11,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+.envrc
 
 # ------------------------------
 # Logs
@@ -20,6 +22,7 @@ npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
 # ------------------------------
 # Build / Output
@@ -27,12 +30,14 @@ yarn-error.log*
 dist/
 build/
 out/
+.next/
 
 # ------------------------------
 # Prisma
 # ------------------------------
-# Prisma generates client (keep it tracked usually)
-# But ignore engines & local artifacts if needed
+# Keep migrations tracked, ignore generated/local artifacts
+.prisma/
+prisma/generated/
 prisma/*.db
 prisma/*.sqlite
 prisma/dev.db
@@ -51,6 +56,8 @@ prisma/dev.db
 .tmp/
 .temp/
 *.cache
+tmp/
+temp/
 
 # ------------------------------
 # Coverage
@@ -77,6 +84,7 @@ Thumbs.db
 pids/
 *.pid
 *.pid.lock
+*.seed
 
 # ------------------------------
 # Misc
@@ -84,6 +92,8 @@ pids/
 *.tgz
 *.bak
 *.old
+*.local
+_tmp_*
 
 # ------------------------------
 # Docker (optional)
