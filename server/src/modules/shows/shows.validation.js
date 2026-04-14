@@ -22,6 +22,7 @@ export const createShowSchema = z.object({
       startTime: z.coerce.date(),
       endTime: z.coerce.date(),
       basePrice: z.coerce.number().positive(),
+      pricingProfile: z.any().optional(),
     })
     .refine((value) => value.endTime > value.startTime, {
       message: "End time must be after start time",
@@ -37,6 +38,7 @@ export const updateShowSchema = z.object({
       startTime: z.coerce.date().optional(),
       endTime: z.coerce.date().optional(),
       basePrice: z.coerce.number().positive().optional(),
+      pricingProfile: z.any().optional(),
       status: showStatusEnum.optional(),
     })
     .refine(

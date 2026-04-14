@@ -70,8 +70,10 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
           { label: "Normal (Small Screen)", value: "NORMAL" },
         ],
       },
-      { key: "totalRows", label: "Total Rows", type: "number", placeholder: "12" },
-      { key: "totalCols", label: "Total Columns", type: "number", placeholder: "18" },
+      { key: "totalCols", label: "Columns (Width)", type: "number", placeholder: "18" },
+      { key: "regularRows", label: "Basic Rows (Front)", type: "number", placeholder: "5" },
+      { key: "coupleRows", label: "Premium Rows (Middle)", type: "number", placeholder: "5" },
+      { key: "reclinerRows", label: "Recliner Rows (Back)", type: "number", placeholder: "2" },
     ],
   },
   {
@@ -101,7 +103,9 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
       { key: "screenId", label: "Screen ID", type: "number", placeholder: "1" },
       { key: "startTime", label: "Start Time", type: "datetime-local" },
       { key: "endTime", label: "End Time", type: "datetime-local" },
-      { key: "basePrice", label: "Base Price", type: "number", placeholder: "250" },
+      { key: "basePrice", label: "Basic Price", type: "number", placeholder: "250" },
+      { key: "couplePrice", label: "Premium Price", type: "number", placeholder: "350" },
+      { key: "reclinerPrice", label: "Recliner Price", type: "number", placeholder: "500" },
     ],
   },
   {

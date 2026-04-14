@@ -19,6 +19,7 @@ export const createScreenSchema = z.object({
     totalRows: z.coerce.number().int().positive(),
     totalCols: z.coerce.number().int().positive(),
     seatCapacity: z.coerce.number().int().positive(),
+    layoutProfile: z.any().optional(),
   }),
   params: z.object({}).optional(),
   query: z.object({}).optional(),
@@ -32,6 +33,7 @@ export const updateScreenSchema = z.object({
       totalRows: z.coerce.number().int().positive().optional(),
       totalCols: z.coerce.number().int().positive().optional(),
       seatCapacity: z.coerce.number().int().positive().optional(),
+      layoutProfile: z.any().optional(),
       isActive: z.boolean().optional(),
     })
     .refine((value) => Object.keys(value).length > 0, "At least one field is required to update"),

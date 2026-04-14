@@ -46,6 +46,7 @@ export async function createShow(payload) {
       startTime: payload.startTime,
       endTime: payload.endTime,
       basePrice: payload.basePrice,
+      pricingProfile: payload.pricingProfile,
       status: "SCHEDULED",
     },
     include: {
@@ -68,6 +69,7 @@ export async function updateShow(id, payload) {
       ...(payload.startTime !== undefined ? { startTime: payload.startTime } : {}),
       ...(payload.endTime !== undefined ? { endTime: payload.endTime } : {}),
       ...(payload.basePrice !== undefined ? { basePrice: payload.basePrice } : {}),
+      ...(payload.pricingProfile !== undefined ? { pricingProfile: payload.pricingProfile } : {}),
       ...(payload.status !== undefined ? { status: payload.status } : {}),
     },
     include: {

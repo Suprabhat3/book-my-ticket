@@ -8,6 +8,7 @@ import { createModuleItem, fetchModuleItems, updateModuleItem } from "@/lib/admi
 import { AdminModuleKey, getAdminModuleByKey } from "@/lib/admin-modules";
 import { getAccessToken } from "@/lib/auth-storage";
 import { uploadMoviePosterToImageKit } from "@/lib/imagekit-upload";
+import { SeatLayoutPreview } from "@/components/seat-layout-preview";
 
 type ListState = unknown[];
 type ItemRecord = Record<string, unknown>;
@@ -396,9 +397,11 @@ export default function AdminModulePage() {
         const startTime = (formState.startTime || "").trim();
         const endTime = (formState.endTime || "").trim();
         const basePrice = (formState.basePrice || "").trim();
+        const couplePrice = (formState.couplePrice || "").trim();
+        const reclinerPrice = (formState.reclinerPrice || "").trim();
 
         if (!movieId || !startTime || !endTime || !basePrice) {
-          throw new ApiError("Movie, start time, end time, and base price are required.");
+          throw new ApiError("Movie, start time, end time, and basic price are required.");
         }
 
         if (showAssignments.length === 0) {
@@ -428,6 +431,10 @@ export default function AdminModulePage() {
             startTime: normalizeFormValue("startTime", startTime),
             endTime: normalizeFormValue("endTime", endTime),
             basePrice: normalizeFormValue("basePrice", basePrice),
+            pricingProfile: {
+              couplePrice: normalizeFormValue("basePrice", couplePrice),
+              reclinerPrice: normalizeFormValue("basePrice", reclinerPrice),
+            },
           });
           setSuccessMessage("Show updated successfully.");
         } else {
@@ -440,6 +447,10 @@ export default function AdminModulePage() {
                 startTime: normalizeFormValue("startTime", startTime),
                 endTime: normalizeFormValue("endTime", endTime),
                 basePrice: normalizeFormValue("basePrice", basePrice),
+                pricingProfile: {
+                  couplePrice: normalizeFormValue("basePrice", couplePrice),
+                  reclinerPrice: normalizeFormValue("basePrice", reclinerPrice),
+                },
               }),
             ),
           );
@@ -452,6 +463,8 @@ export default function AdminModulePage() {
           startTime: "",
           endTime: "",
           basePrice: "",
+          couplePrice: "",
+          reclinerPrice: "",
         }));
         setShowAssignments([{ theaterId: "", screenId: "" }]);
         await loadItems();
@@ -558,9 +571,26 @@ export default function AdminModulePage() {
       }
 
       if (moduleKey === "screens") {
-        const rows = Number(payload.totalRows) || 0;
+        const regularR = Number(payload.regularRows) || 0;
+        const coupleR = Number(payload.coupleRows) || 0;
+        const reclinerR = Number(payload.reclinerRows) || 0;
+        const rows = regularR + coupleR + reclinerR;
         const cols = Number(payload.totalCols) || 0;
-        payload.seatCapacity = rows * cols;
+        
+        payload.totalRows = rows;
+        const reclinerCapacity = reclinerR * Math.floor(cols / 2);
+        const normalCapacity = (regularR + coupleR) * cols;
+        payload.seatCapacity = normalCapacity + reclinerCapacity;
+        
+        payload.layoutProfile = {
+          regularRows: regularR,
+          coupleRows: coupleR,
+          reclinerRows: reclinerR,
+        };
+
+        delete payload.regularRows;
+        delete payload.coupleRows;
+        delete payload.reclinerRows;
       }
 
       const token = getAccessToken();
@@ -607,6 +637,19 @@ export default function AdminModulePage() {
       } else {
         stateToSet[field.key] = "";
       }
+    }
+
+    if (moduleKey === "screens" && item.layoutProfile) {
+      const layout = item.layoutProfile as Record<string, any>;
+      stateToSet.regularRows = String(layout.regularRows || 0);
+      stateToSet.coupleRows = String(layout.coupleRows || 0);
+      stateToSet.reclinerRows = String(layout.reclinerRows || 0);
+    }
+    
+    if (moduleKey === "shows" && item.pricingProfile) {
+      const pricing = item.pricingProfile as Record<string, any>;
+      stateToSet.couplePrice = String(pricing.couplePrice || "");
+      stateToSet.reclinerPrice = String(pricing.reclinerPrice || "");
     }
 
     if (moduleKey === "movies") {
@@ -945,50 +988,40 @@ export default function AdminModulePage() {
           )}
 
           {isScreensModule ? (
-            <div className="md:col-span-2 mt-4 space-y-4 border-t border-surface-container-high/60 pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <h4 className="text-sm font-bold text-on-surface">Screen Layout Preview</h4>
-                  <p className="text-xs text-on-surface-variant">Configure rows and columns to generate the screen seating manifest.</p>
-                </div>
-                <div className="text-xs font-bold px-3 py-1 bg-primary/10 text-primary rounded-full">
-                  Capacity: {(Number(formState.totalRows) || 0) * (Number(formState.totalCols) || 0)} seats
-                </div>
-              </div>
-              <div className="bg-surface-container-low rounded-xl p-6 overflow-auto border border-surface-container-high flex flex-col items-center min-h-[160px] justify-center">
-                <div className="w-2/3 h-6 bg-blue-300 rounded-t-full mb-10 shadow-sm flex items-center justify-center relative">
-                   <span className="text-[10px] font-bold text-blue-900 absolute tracking-widest">SCREEN</span>
-                </div>
-                {Number(formState.totalRows) > 0 && Number(formState.totalCols) > 0 ? (
-                  <div 
-                    className="grid gap-1.5 sm:gap-2 mb-4"
-                    style={{
-                      gridTemplateColumns: `repeat(${Math.min(Number(formState.totalCols) || 0, 50)}, minmax(0, 1fr))`
-                    }}
-                  >
-                    {Array.from({ length: Math.min(Number(formState.totalRows) || 0, 50) }).map((_, r) => (
-                      Array.from({ length: Math.min(Number(formState.totalCols) || 0, 50) }).map((_, c) => (
-                        <div 
-                          key={`${r}-${c}`} 
-                          className="w-3 h-3 sm:w-5 sm:h-5 rounded-t-lg rounded-b-sm bg-primary/80 border border-primary/20 shadow-sm transition-transform hover:scale-125 hover:bg-primary cursor-pointer"
-                          title={`Row ${r+1}, Col ${c+1}`}
-                        />
-                      ))
-                    ))}
+            (() => {
+              const reg = Number(formState.regularRows) || 0;
+              const cpl = Number(formState.coupleRows) || 0;
+              const rec = Number(formState.reclinerRows) || 0;
+              const cols = Number(formState.totalCols) || 0;
+              const cap = (reg + cpl) * cols + rec * Math.floor(cols / 2);
+
+              return (
+                <div className="md:col-span-2 mt-4 space-y-4 border-t border-surface-container-high/60 pt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-on-surface">Screen Layout Preview</h4>
+                      <p className="text-xs text-on-surface-variant">Configure rows and columns to generate the screen seating manifest.</p>
+                      
+                      <div className="flex items-center gap-3 mt-2 text-xs font-semibold text-on-surface-variant">
+                        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-t-sm rounded-b-sm bg-blue-500/80"></div> Basic</div>
+                        <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-t-sm rounded-b-sm bg-rose-500/80"></div> Premium</div>
+                        <div className="flex items-center gap-1"><div className="w-5 h-3 rounded-t-sm rounded-b-sm bg-amber-500/80"></div> Recliner</div>
+                      </div>
+                    </div>
+                    <div className="text-xs font-bold px-3 py-1 bg-primary/10 text-primary rounded-full">
+                      Capacity: {cap} seats
+                    </div>
                   </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-on-surface-variant my-4">
-                    <span className="font-semibold">Enter screen dimensions</span>
-                    <span className="text-xs">e.g. 10 rows × 20 columns</span>
-                  </div>
-                )}
-                {((Number(formState.totalRows) || 0) > 50 || (Number(formState.totalCols) || 0) > 50) && (
-                   <div className="text-center text-xs text-on-surface-variant mt-2 max-w-sm">
-                     Preview visually capped at 50x50 to prevent browser slowdowns. Actual capacity ({(Number(formState.totalRows) || 0) * (Number(formState.totalCols) || 0)} seats) will be safely saved in database.
-                   </div>
-                )}
-              </div>
-            </div>
+                  
+                  <SeatLayoutPreview 
+                    regularRows={reg} 
+                    coupleRows={cpl} 
+                    reclinerRows={rec} 
+                    totalCols={cols} 
+                  />
+                </div>
+              );
+            })()
           ) : null}
 
           {isMoviesModule ? (

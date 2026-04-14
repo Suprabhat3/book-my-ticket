@@ -161,9 +161,10 @@ model Show {
   screenId   Int
   startTime  DateTime
   endTime    DateTime
-  basePrice  Decimal     @db.Decimal(10, 2)
-  status     ShowStatus  @default(SCHEDULED)
-  movie      Movie       @relation(fields: [movieId], references: [id], onDelete: Restrict)
+  basePrice      Decimal     @db.Decimal(10, 2)
+  pricingProfile Json?
+  status         ShowStatus  @default(SCHEDULED)
+  movie          Movie       @relation(fields: [movieId], references: [id], onDelete: Restrict)
   theater    Theater     @relation(fields: [theaterId], references: [id], onDelete: Restrict)
   screen     Screen      @relation(fields: [screenId], references: [id], onDelete: Restrict)
   showSeats  ShowSeat[]

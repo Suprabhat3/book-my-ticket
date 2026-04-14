@@ -44,6 +44,7 @@ export async function createScreen(payload) {
       totalRows: payload.totalRows,
       totalCols: payload.totalCols,
       seatCapacity: payload.seatCapacity,
+      layoutProfile: payload.layoutProfile,
       isActive: true,
     },
     include: {
@@ -68,6 +69,7 @@ export async function updateScreen(id, payload) {
       ...(payload.totalRows !== undefined ? { totalRows: payload.totalRows } : {}),
       ...(payload.totalCols !== undefined ? { totalCols: payload.totalCols } : {}),
       ...(payload.seatCapacity !== undefined ? { seatCapacity: payload.seatCapacity } : {}),
+      ...(payload.layoutProfile !== undefined ? { layoutProfile: payload.layoutProfile } : {}),
       ...(payload.isActive !== undefined ? { isActive: payload.isActive } : {}),
     },
     include: {
