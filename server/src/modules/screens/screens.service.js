@@ -1,6 +1,53 @@
 import { prisma } from "../../db/prisma.js";
 import { AppError } from "../../common/utils/app-error.js";
 
+function getRowLabel(index) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const first = Math.floor(index / alphabet.length) - 1;
+  const second = index % alphabet.length;
+
+  if (first < 0) {
+    return alphabet[second];
+  }
+
+  return `${alphabet[first]}${alphabet[second]}`;
+}
+
+function buildSeatRows(totalRows, totalCols, layoutProfile) {
+  const regularRows = Number(layoutProfile?.regularRows || 0);
+  const coupleRows = Number(layoutProfile?.coupleRows || 0);
+  const reclinerRows = Number(layoutProfile?.reclinerRows || 0);
+  const configuredRows = regularRows + coupleRows + reclinerRows;
+
+  const safeRegularRows = configuredRows > 0 ? regularRows : totalRows;
+  const safeCoupleRows = configuredRows > 0 ? coupleRows : 0;
+
+  const rows = [];
+
+  for (let rowIndex = 0; rowIndex < totalRows; rowIndex += 1) {
+    const rowLabel = getRowLabel(rowIndex);
+    let seatType = "REGULAR";
+
+    if (rowIndex >= safeRegularRows + safeCoupleRows) {
+      seatType = "RECLINER";
+    } else if (rowIndex >= safeRegularRows) {
+      seatType = "COUPLE";
+    }
+
+    const seatsInRow = seatType === "RECLINER" ? Math.max(1, Math.floor(totalCols / 2)) : totalCols;
+    for (let seatNumber = 1; seatNumber <= seatsInRow; seatNumber += 1) {
+      rows.push({
+        rowLabel,
+        seatNumber,
+        seatLabel: `${rowLabel}${seatNumber}`,
+        seatType,
+      });
+    }
+  }
+
+  return rows;
+}
+
 export async function listScreens({ theaterId, includeInactive = false }) {
   return prisma.screen.findMany({
     where: {
@@ -36,22 +83,42 @@ export async function createScreen(payload) {
     throw new AppError("Screen with this name already exists in selected theater", 409);
   }
 
-  return prisma.screen.create({
-    data: {
-      theaterId: payload.theaterId,
-      name: payload.name.trim(),
-      screenType: payload.screenType,
-      totalRows: payload.totalRows,
-      totalCols: payload.totalCols,
-      seatCapacity: payload.seatCapacity,
-      layoutProfile: payload.layoutProfile,
-      isActive: true,
-    },
-    include: {
-      theater: {
-        select: { id: true, name: true, cityId: true },
+  return prisma.$transaction(async (tx) => {
+    const screen = await tx.screen.create({
+      data: {
+        theaterId: payload.theaterId,
+        name: payload.name.trim(),
+        screenType: payload.screenType,
+        totalRows: payload.totalRows,
+        totalCols: payload.totalCols,
+        seatCapacity: payload.seatCapacity,
+        layoutProfile: payload.layoutProfile,
+        isActive: true,
       },
-    },
+      include: {
+        theater: {
+          select: { id: true, name: true, cityId: true },
+        },
+      },
+    });
+
+    const seatRows = buildSeatRows(payload.totalRows, payload.totalCols, payload.layoutProfile);
+    if (seatRows.length === 0) {
+      throw new AppError("Screen layout produced zero seats", 400);
+    }
+
+    await tx.screenSeat.createMany({
+      data: seatRows.map((seat) => ({
+        screenId: screen.id,
+        rowLabel: seat.rowLabel,
+        seatNumber: seat.seatNumber,
+        seatLabel: seat.seatLabel,
+        seatType: seat.seatType,
+        isActive: true,
+      })),
+    });
+
+    return screen;
   });
 }
 

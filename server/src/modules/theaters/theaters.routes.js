@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../../common/middlewares/auth.middleware.js";
 import { validate } from "../../common/middlewares/validate.middleware.js";
-import { createTheater, deleteTheater, listTheaters, updateTheater } from "./theaters.controller.js";
+import {
+  createTheater,
+  deleteTheater,
+  listPublicTheaters,
+  listTheaters,
+  updateTheater,
+} from "./theaters.controller.js";
 import {
   createTheaterSchema,
   listTheatersSchema,
@@ -11,6 +17,7 @@ import {
 
 const router = Router();
 
+router.get("/public", validate(listTheatersSchema), listPublicTheaters);
 router.get("/", requireAuth, validate(listTheatersSchema), listTheaters);
 router.post("/", requireAuth, requireRole("ADMIN"), validate(createTheaterSchema), createTheater);
 router.put("/:id", requireAuth, requireRole("ADMIN"), validate(updateTheaterSchema), updateTheater);

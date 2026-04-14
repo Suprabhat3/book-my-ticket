@@ -17,6 +17,31 @@ export const listShows = asyncHandler(async (req, res) => {
   });
 });
 
+export const listPublicShows = asyncHandler(async (req, res) => {
+  const query = req.validated?.query || {};
+  const shows = await showsService.listShows({
+    movieId: query.movieId,
+    theaterId: query.theaterId,
+    screenId: query.screenId,
+    status: query.status,
+    publicOnly: true,
+  });
+
+  return sendSuccess(res, {
+    message: "Shows fetched successfully",
+    data: shows,
+  });
+});
+
+export const getPublicShowSeatMap = asyncHandler(async (req, res) => {
+  const show = await showsService.getPublicShowSeatMap(req.validated.params.id);
+
+  return sendSuccess(res, {
+    message: "Show seat map fetched successfully",
+    data: show,
+  });
+});
+
 export const createShow = asyncHandler(async (req, res) => {
   const show = await showsService.createShow(req.validated.body);
 

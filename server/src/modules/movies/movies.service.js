@@ -31,6 +31,46 @@ export async function listMovies({ includeInactive = false, search = "", languag
   });
 }
 
+export async function listPublicMovies({ search = "", language = "" }) {
+  return prisma.movie.findMany({
+    where: {
+      isActive: true,
+      ...(search
+        ? {
+            title: {
+              contains: search,
+              mode: "insensitive",
+            },
+          }
+        : {}),
+      ...(language
+        ? {
+            language: {
+              equals: language,
+              mode: "insensitive",
+            },
+          }
+        : {}),
+    },
+    orderBy: [{ releaseDate: "desc" }, { title: "asc" }],
+  });
+}
+
+export async function getPublicMovieById(id) {
+  const movie = await prisma.movie.findFirst({
+    where: {
+      id,
+      isActive: true,
+    },
+  });
+
+  if (!movie) {
+    throw new AppError("Movie not found", 404);
+  }
+
+  return movie;
+}
+
 export async function createMovie(payload) {
   const duplicate = await prisma.movie.findFirst({
     where: {

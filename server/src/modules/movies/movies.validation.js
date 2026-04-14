@@ -56,3 +56,11 @@ export const movieIdParamSchema = z.object({
   }),
   query: z.object({}).optional(),
 });
+
+export const moviePublicDetailsParamSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({
+    id: z.coerce.number().int().positive(),
+  }),
+  query: z.object({}).optional(),
+});

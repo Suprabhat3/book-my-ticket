@@ -16,6 +16,20 @@ export const listTheaters = asyncHandler(async (req, res) => {
   });
 });
 
+export const listPublicTheaters = asyncHandler(async (req, res) => {
+  const query = req.validated?.query || {};
+  const theaters = await theatersService.listTheaters({
+    cityId: query.cityId,
+    includeInactive: false,
+    search: query.search || "",
+  });
+
+  return sendSuccess(res, {
+    message: "Theaters fetched successfully",
+    data: theaters,
+  });
+});
+
 export const createTheater = asyncHandler(async (req, res) => {
   const theater = await theatersService.createTheater(req.validated.body);
 

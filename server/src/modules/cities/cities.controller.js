@@ -15,6 +15,19 @@ export const listCities = asyncHandler(async (req, res) => {
   });
 });
 
+export const listPublicCities = asyncHandler(async (req, res) => {
+  const query = req.validated?.query || {};
+  const cities = await citiesService.listCities({
+    includeInactive: false,
+    search: query.search || "",
+  });
+
+  return sendSuccess(res, {
+    message: "Cities fetched successfully",
+    data: cities,
+  });
+});
+
 export const createCity = asyncHandler(async (req, res) => {
   const city = await citiesService.createCity(req.validated.body);
 

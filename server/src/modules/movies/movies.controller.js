@@ -16,6 +16,28 @@ export const listMovies = asyncHandler(async (req, res) => {
   });
 });
 
+export const listPublicMovies = asyncHandler(async (req, res) => {
+  const query = req.validated?.query || {};
+  const movies = await moviesService.listPublicMovies({
+    search: query.search || "",
+    language: query.language || "",
+  });
+
+  return sendSuccess(res, {
+    message: "Movies fetched successfully",
+    data: movies,
+  });
+});
+
+export const getPublicMovieDetails = asyncHandler(async (req, res) => {
+  const movie = await moviesService.getPublicMovieById(req.validated.params.id);
+
+  return sendSuccess(res, {
+    message: "Movie fetched successfully",
+    data: movie,
+  });
+});
+
 export const createMovie = asyncHandler(async (req, res) => {
   const movie = await moviesService.createMovie(req.validated.body);
 
