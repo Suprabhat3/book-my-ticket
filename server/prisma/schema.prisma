@@ -141,6 +141,10 @@ model Movie {
   censorRating         String?
   posterUrl            String?
   posterImagekitFileId String?
+  posterVerticalUrl            String?
+  posterVerticalImagekitFileId String?
+  posterHorizontalUrl          String?
+  posterHorizontalImagekitFileId String?
   trailerUrl           String?
   isActive             Boolean   @default(true)
   shows                Show[]

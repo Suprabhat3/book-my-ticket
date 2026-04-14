@@ -1,5 +1,10 @@
 import { prisma } from "../../db/prisma.js";
 import { AppError } from "../../common/utils/app-error.js";
+import { createImageKitUploadAuthParams } from "../../common/utils/imagekit-auth.js";
+
+export function getImageKitUploadAuth() {
+  return createImageKitUploadAuthParams();
+}
 
 export async function listMovies({ includeInactive = false, search = "", language = "" }) {
   return prisma.movie.findMany({
@@ -49,6 +54,12 @@ export async function createMovie(payload) {
       language: payload.language.trim(),
       genre: payload.genre.trim(),
       releaseDate: payload.releaseDate,
+      posterVerticalUrl: payload.posterVerticalUrl?.trim(),
+      posterVerticalImagekitFileId: payload.posterVerticalImagekitFileId?.trim(),
+      posterHorizontalUrl: payload.posterHorizontalUrl?.trim(),
+      posterHorizontalImagekitFileId: payload.posterHorizontalImagekitFileId?.trim(),
+      posterUrl: payload.posterVerticalUrl?.trim(),
+      posterImagekitFileId: payload.posterVerticalImagekitFileId?.trim(),
       isActive: true,
     },
   });
@@ -69,6 +80,24 @@ export async function updateMovie(id, payload) {
       ...(payload.language !== undefined ? { language: payload.language.trim() } : {}),
       ...(payload.genre !== undefined ? { genre: payload.genre.trim() } : {}),
       ...(payload.releaseDate !== undefined ? { releaseDate: payload.releaseDate } : {}),
+      ...(payload.posterVerticalUrl !== undefined
+        ? {
+            posterVerticalUrl: payload.posterVerticalUrl.trim(),
+            posterUrl: payload.posterVerticalUrl.trim(),
+          }
+        : {}),
+      ...(payload.posterVerticalImagekitFileId !== undefined
+        ? {
+            posterVerticalImagekitFileId: payload.posterVerticalImagekitFileId.trim(),
+            posterImagekitFileId: payload.posterVerticalImagekitFileId.trim(),
+          }
+        : {}),
+      ...(payload.posterHorizontalUrl !== undefined
+        ? { posterHorizontalUrl: payload.posterHorizontalUrl.trim() }
+        : {}),
+      ...(payload.posterHorizontalImagekitFileId !== undefined
+        ? { posterHorizontalImagekitFileId: payload.posterHorizontalImagekitFileId.trim() }
+        : {}),
       ...(payload.isActive !== undefined ? { isActive: payload.isActive } : {}),
     },
   });

@@ -12,6 +12,26 @@ type BackendResponse<T> = {
   error: unknown;
 };
 
+type ImageKitUploadAuth = {
+  token: string;
+  expire: number;
+  signature: string;
+  publicKey: string;
+  urlEndpoint: string;
+};
+
+let activeRefreshPromise: Promise<string> | null = null;
+
+function getSharedRefreshPromise() {
+  if (!activeRefreshPromise) {
+    activeRefreshPromise = refreshAccessToken().finally(() => {
+      activeRefreshPromise = null;
+    });
+  }
+
+  return activeRefreshPromise;
+}
+
 function buildHeaders(accessToken: string | null) {
   if (!accessToken) {
     throw new ApiError("Access token missing. Please login again.");
@@ -49,7 +69,7 @@ async function requestWithAutoRefresh(
   }
 
   try {
-    const newAccessToken = await refreshAccessToken();
+    const newAccessToken = await getSharedRefreshPromise();
     setAccessToken(newAccessToken);
 
     const nextHeaders = new Headers(init.headers);
@@ -106,5 +126,16 @@ export async function createModuleItem(
   });
 
   const payload = await parseBackendResponse<unknown>(response);
+  return payload.data;
+}
+
+export async function fetchMovieUploadAuth(accessToken: string | null) {
+  const response = await requestWithAutoRefresh(`${API_BASE_URL}/movies/upload-auth`, {
+    method: "GET",
+    headers: buildHeaders(accessToken),
+    credentials: "include",
+  });
+
+  const payload = await parseBackendResponse<ImageKitUploadAuth>(response);
   return payload.data;
 }

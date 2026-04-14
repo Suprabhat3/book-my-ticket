@@ -7,6 +7,7 @@ import { ApiError } from "@/lib/api";
 import { createModuleItem, fetchModuleItems } from "@/lib/admin-api";
 import { AdminModuleKey, getAdminModuleByKey } from "@/lib/admin-modules";
 import { getAccessToken } from "@/lib/auth-storage";
+import { uploadMoviePosterToImageKit } from "@/lib/imagekit-upload";
 
 type ListState = unknown[];
 type ItemRecord = Record<string, unknown>;
@@ -15,6 +16,7 @@ type TheaterOption = { id: number; name: string; cityId: number };
 type ScreenOption = { id: number; name: string; theaterId: number };
 type MovieOption = { id: number; title: string };
 type ShowAssignment = { theaterId: string; screenId: string };
+type PosterVariant = "vertical" | "horizontal";
 
 function normalizeFormValue(key: string, value: string): unknown {
   const numberFields = new Set([
@@ -46,7 +48,16 @@ const moduleFieldMap: Record<AdminModuleKey, string[]> = {
   cities: ["name", "state", "country", "isActive", "createdAt"],
   theaters: ["name", "cityId", "addressLine", "pincode", "isActive", "createdAt"],
   screens: ["name", "theaterId", "screenType", "totalRows", "totalCols", "seatCapacity", "isActive"],
-  movies: ["title", "language", "genre", "durationMinutes", "releaseDate", "isActive"],
+  movies: [
+    "title",
+    "language",
+    "genre",
+    "durationMinutes",
+    "releaseDate",
+    "posterVerticalUrl",
+    "posterHorizontalUrl",
+    "isActive",
+  ],
   shows: ["movieId", "theaterId", "screenId", "startTime", "endTime", "basePrice", "status"],
   users: ["name", "email", "role", "createdAt"],
   bookings: ["id", "userId", "showId", "status", "totalAmount", "createdAt"],
@@ -97,14 +108,42 @@ export default function AdminModulePage() {
   const [selectedScreenCityId, setSelectedScreenCityId] = useState("");
   const [screenOptions, setScreenOptions] = useState<ScreenOption[]>([]);
   const [movieOptions, setMovieOptions] = useState<MovieOption[]>([]);
+  const [uploadingPosters, setUploadingPosters] = useState<Record<PosterVariant, boolean>>({
+    vertical: false,
+    horizontal: false,
+  });
+  const [posterPreviewUrls, setPosterPreviewUrls] = useState<Record<PosterVariant, string>>({
+    vertical: "",
+    horizontal: "",
+  });
+  const [selectedPosterFiles, setSelectedPosterFiles] = useState<Record<PosterVariant, File | null>>({
+    vertical: null,
+    horizontal: null,
+  });
   const [showAssignments, setShowAssignments] = useState<ShowAssignment[]>([
     { theaterId: "", screenId: "" },
   ]);
 
   useEffect(() => {
+    return () => {
+      Object.values(posterPreviewUrls).forEach((url) => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, [posterPreviewUrls]);
+
+  useEffect(() => {
     if (!moduleConfig) return;
 
     const initialState = Object.fromEntries(moduleConfig.fields.map((field) => [field.key, ""]));
+    if (moduleConfig.key === "movies") {
+      initialState.posterVerticalUrl = "";
+      initialState.posterVerticalImagekitFileId = "";
+      initialState.posterHorizontalUrl = "";
+      initialState.posterHorizontalImagekitFileId = "";
+    }
     setFormState(initialState);
   }, [moduleConfig]);
 
@@ -275,6 +314,72 @@ export default function AdminModulePage() {
     setFormState((previous) => ({ ...previous, [key]: value }));
   };
 
+  const setPosterPreviewUrl = (variant: PosterVariant, nextUrl: string) => {
+    setPosterPreviewUrls((previous) => {
+      const current = previous[variant];
+      if (current && current !== nextUrl && current.startsWith("blob:")) {
+        URL.revokeObjectURL(current);
+      }
+      return { ...previous, [variant]: nextUrl };
+    });
+  };
+
+  const clearPosterPreviews = () => {
+    setPosterPreviewUrls((previous) => {
+      Object.values(previous).forEach((url) => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+
+      return { vertical: "", horizontal: "" };
+    });
+  };
+
+  const handlePosterUpload = async (variant: PosterVariant, file: File | null) => {
+    if (!file) return;
+
+    try {
+      setError("");
+      setSuccessMessage("");
+      setUploadingPosters((previous) => ({ ...previous, [variant]: true }));
+      setSelectedPosterFiles((previous) => ({ ...previous, [variant]: file }));
+
+      const localPreviewUrl = URL.createObjectURL(file);
+      setPosterPreviewUrl(variant, localPreviewUrl);
+
+      const token = getAccessToken();
+      const uploadResult = await uploadMoviePosterToImageKit({
+        file,
+        variant,
+        accessToken: token,
+        movieTitle: formState.title || "movie",
+      });
+
+      if (variant === "vertical") {
+        setFormState((previous) => ({
+          ...previous,
+          posterVerticalUrl: uploadResult.url,
+          posterVerticalImagekitFileId: uploadResult.fileId,
+        }));
+      } else {
+        setFormState((previous) => ({
+          ...previous,
+          posterHorizontalUrl: uploadResult.url,
+          posterHorizontalImagekitFileId: uploadResult.fileId,
+        }));
+      }
+      setPosterPreviewUrl(variant, uploadResult.url);
+
+      setSuccessMessage(`${variant === "vertical" ? "Vertical" : "Horizontal"} poster uploaded.`);
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "Failed to upload image.";
+      setError(message);
+    } finally {
+      setUploadingPosters((previous) => ({ ...previous, [variant]: false }));
+    }
+  };
+
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!moduleConfig || !moduleConfig.createEnabled) return;
@@ -338,6 +443,87 @@ export default function AdminModulePage() {
         return;
       }
 
+      if (moduleKey === "movies") {
+        const payload: Record<string, unknown> = {};
+        for (const field of moduleConfig.fields) {
+          const value = (formState[field.key] || "").trim();
+          if (!value) {
+            throw new ApiError(`${field.label} is required.`);
+          }
+          payload[field.key] = normalizeFormValue(field.key, value);
+        }
+
+        let posterVerticalUrl = (formState.posterVerticalUrl || "").trim();
+        let posterHorizontalUrl = (formState.posterHorizontalUrl || "").trim();
+        let posterVerticalImagekitFileId = (formState.posterVerticalImagekitFileId || "").trim();
+        let posterHorizontalImagekitFileId = (formState.posterHorizontalImagekitFileId || "").trim();
+
+        const token = getAccessToken();
+
+        if (!posterVerticalUrl && selectedPosterFiles.vertical) {
+          const uploadedVertical = await uploadMoviePosterToImageKit({
+            file: selectedPosterFiles.vertical,
+            variant: "vertical",
+            accessToken: token,
+            movieTitle: formState.title || "movie",
+          });
+          posterVerticalUrl = uploadedVertical.url;
+          posterVerticalImagekitFileId = uploadedVertical.fileId;
+          setFormState((previous) => ({
+            ...previous,
+            posterVerticalUrl: uploadedVertical.url,
+            posterVerticalImagekitFileId: uploadedVertical.fileId,
+          }));
+          setPosterPreviewUrl("vertical", uploadedVertical.url);
+        }
+
+        if (!posterHorizontalUrl && selectedPosterFiles.horizontal) {
+          const uploadedHorizontal = await uploadMoviePosterToImageKit({
+            file: selectedPosterFiles.horizontal,
+            variant: "horizontal",
+            accessToken: token,
+            movieTitle: formState.title || "movie",
+          });
+          posterHorizontalUrl = uploadedHorizontal.url;
+          posterHorizontalImagekitFileId = uploadedHorizontal.fileId;
+          setFormState((previous) => ({
+            ...previous,
+            posterHorizontalUrl: uploadedHorizontal.url,
+            posterHorizontalImagekitFileId: uploadedHorizontal.fileId,
+          }));
+          setPosterPreviewUrl("horizontal", uploadedHorizontal.url);
+        }
+
+        if (!posterVerticalUrl || !posterHorizontalUrl) {
+          throw new ApiError("Upload both vertical and horizontal movie posters.");
+        }
+
+        payload.posterVerticalUrl = posterVerticalUrl;
+        payload.posterHorizontalUrl = posterHorizontalUrl;
+        if (posterVerticalImagekitFileId) {
+          payload.posterVerticalImagekitFileId = posterVerticalImagekitFileId;
+        }
+        if (posterHorizontalImagekitFileId) {
+          payload.posterHorizontalImagekitFileId = posterHorizontalImagekitFileId;
+        }
+
+        await createModuleItem(moduleConfig.key, token, payload);
+        setSuccessMessage("Movie created successfully.");
+
+        const reset = Object.fromEntries(moduleConfig.fields.map((field) => [field.key, ""]));
+        setFormState({
+          ...reset,
+          posterVerticalUrl: "",
+          posterVerticalImagekitFileId: "",
+          posterHorizontalUrl: "",
+          posterHorizontalImagekitFileId: "",
+        });
+        setSelectedPosterFiles({ vertical: null, horizontal: null });
+        clearPosterPreviews();
+        await loadItems();
+        return;
+      }
+
       const payload: Record<string, unknown> = {};
       for (const field of moduleConfig.fields) {
         const value = (formState[field.key] || "").trim();
@@ -380,6 +566,8 @@ export default function AdminModulePage() {
       ? theaterOptions.filter((theater) => String(theater.cityId) === selectedScreenCityId)
       : [];
   const isShowsModule = moduleKey === "shows";
+  const isMoviesModule = moduleKey === "movies";
+  const isAnyPosterUploading = uploadingPosters.vertical || uploadingPosters.horizontal;
 
   const getScreensByTheater = (theaterId: string) =>
     screenOptions.filter((screen) => String(screen.theaterId) === theaterId);
@@ -635,13 +823,93 @@ export default function AdminModulePage() {
           ))
           )}
 
+          {isMoviesModule ? (
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-3">
+                <label className="text-sm font-semibold text-on-surface">Vertical Poster (card)</label>
+                <p className="text-xs text-on-surface-variant">Display ratio: 2:3 (auto-cropped in preview)</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void handlePosterUpload("vertical", event.target.files?.[0] || null)}
+                  disabled={uploadingPosters.vertical}
+                  className="rounded-xl px-3 py-2 bg-surface border border-surface-container-high outline-none"
+                />
+                <p className="text-xs text-on-surface-variant">
+                  {uploadingPosters.vertical
+                    ? "Uploading..."
+                    : formState.posterVerticalUrl
+                      ? "Uploaded"
+                      : "Not uploaded"}
+                </p>
+                {formState.posterVerticalUrl ? (
+                  <a
+                    href={formState.posterVerticalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    View uploaded image
+                  </a>
+                ) : null}
+                {posterPreviewUrls.vertical || formState.posterVerticalUrl ? (
+                  <div className="mt-1 rounded-lg overflow-hidden border border-surface-container-high bg-surface aspect-2/3">
+                    <img
+                      src={posterPreviewUrls.vertical || formState.posterVerticalUrl}
+                      alt="Vertical poster preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-2 rounded-xl bg-surface-container-low p-3">
+                <label className="text-sm font-semibold text-on-surface">Horizontal Poster (banner)</label>
+                <p className="text-xs text-on-surface-variant">Display ratio: 16:9 (auto-cropped in preview)</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => void handlePosterUpload("horizontal", event.target.files?.[0] || null)}
+                  disabled={uploadingPosters.horizontal}
+                  className="rounded-xl px-3 py-2 bg-surface border border-surface-container-high outline-none"
+                />
+                <p className="text-xs text-on-surface-variant">
+                  {uploadingPosters.horizontal
+                    ? "Uploading..."
+                    : formState.posterHorizontalUrl
+                      ? "Uploaded"
+                      : "Not uploaded"}
+                </p>
+                {formState.posterHorizontalUrl ? (
+                  <a
+                    href={formState.posterHorizontalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    View uploaded image
+                  </a>
+                ) : null}
+                {posterPreviewUrls.horizontal || formState.posterHorizontalUrl ? (
+                  <div className="mt-1 rounded-lg overflow-hidden border border-surface-container-high bg-surface aspect-video">
+                    <img
+                      src={posterPreviewUrls.horizontal || formState.posterHorizontalUrl}
+                      alt="Horizontal poster preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <div className="md:col-span-2 flex items-center gap-3">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isAnyPosterUploading}
               className="clay-button-primary px-6 py-3 rounded-xl font-bold disabled:opacity-70"
             >
-              {isSubmitting ? "Saving..." : `Create ${moduleConfig.label.slice(0, -1)}`}
+              {isSubmitting ? "Saving..." : isAnyPosterUploading ? "Uploading images..." : `Create ${moduleConfig.label.slice(0, -1)}`}
             </button>
             {successMessage ? <span className="text-sm text-green-700 font-semibold">{successMessage}</span> : null}
           </div>
@@ -684,7 +952,26 @@ export default function AdminModulePage() {
                         <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
                           {toTitleCase(field)}
                         </dt>
-                        <dd className="text-sm font-medium text-on-surface">{formatValue(record[field])}</dd>
+                        {moduleKey === "movies" &&
+                        (field === "posterVerticalUrl" || field === "posterHorizontalUrl") &&
+                        typeof record[field] === "string" &&
+                        record[field] ? (
+                          <dd className="mt-2">
+                            <div
+                              className={`overflow-hidden rounded-lg border border-surface-container-high bg-surface ${
+                                field === "posterVerticalUrl" ? "aspect-2/3" : "aspect-video"
+                              }`}
+                            >
+                              <img
+                                src={record[field] as string}
+                                alt={`${field === "posterVerticalUrl" ? "Vertical" : "Horizontal"} poster`}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          </dd>
+                        ) : (
+                          <dd className="text-sm font-medium text-on-surface">{formatValue(record[field])}</dd>
+                        )}
                       </div>
                     ))}
                   </dl>

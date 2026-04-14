@@ -26,6 +26,15 @@ export const createMovie = asyncHandler(async (req, res) => {
   });
 });
 
+export const getUploadAuth = asyncHandler(async (_req, res) => {
+  const data = moviesService.getImageKitUploadAuth();
+
+  return sendSuccess(res, {
+    message: "ImageKit upload auth generated successfully",
+    data,
+  });
+});
+
 export const updateMovie = asyncHandler(async (req, res) => {
   const movie = await moviesService.updateMovie(req.validated.params.id, req.validated.body);
 
