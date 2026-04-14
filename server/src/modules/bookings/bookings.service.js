@@ -65,6 +65,7 @@ async function releaseExpiredSeatLocks(tx, showId) {
     data: {
       status: "AVAILABLE",
       lockedUntil: null,
+      lockedByUserId: null,
     },
   });
 }
@@ -166,7 +167,11 @@ export async function createBooking({ userId, showId, showSeatIds }) {
         id: { in: showSeatIds },
         showId,
       },
-      include: {
+      select: {
+        id: true,
+        price: true,
+        status: true,
+        lockedByUserId: true,
         screenSeat: {
           select: {
             id: true,
@@ -181,7 +186,9 @@ export async function createBooking({ userId, showId, showSeatIds }) {
       throw new AppError("One or more seats are invalid for this show", 400);
     }
 
-    const unavailable = seats.filter((seat) => seat.status !== "AVAILABLE");
+    const unavailable = seats.filter(
+      (seat) => seat.status === "BOOKED" || (seat.status === "LOCKED" && seat.lockedByUserId !== userId),
+    );
     if (unavailable.length > 0) {
       throw new AppError("Some selected seats are no longer available", 409);
     }
@@ -192,11 +199,18 @@ export async function createBooking({ userId, showId, showSeatIds }) {
       const lockResult = await tx.showSeat.updateMany({
         where: {
           id: seat.id,
-          status: "AVAILABLE",
+          OR: [
+            { status: "AVAILABLE" },
+            {
+              status: "LOCKED",
+              lockedByUserId: userId,
+            },
+          ],
         },
         data: {
           status: "LOCKED",
           lockedUntil: holdUntil,
+          lockedByUserId: userId,
         },
       });
 

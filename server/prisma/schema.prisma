@@ -184,6 +184,7 @@ model ShowSeat {
   price         Decimal           @db.Decimal(10, 2)
   status        SeatBookingStatus @default(AVAILABLE)
   lockedUntil   DateTime?
+  lockedByUserId String?
   show          Show              @relation(fields: [showId], references: [id], onDelete: Restrict)
   screenSeat    ScreenSeat        @relation(fields: [screenSeatId], references: [id], onDelete: Restrict)
   bookingSeats  BookingSeat[]
@@ -192,6 +193,7 @@ model ShowSeat {
 
   @@unique([showId, screenSeatId])
   @@index([showId, status])
+  @@index([showId, lockedByUserId])
 }
 
 model Booking {

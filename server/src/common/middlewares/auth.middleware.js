@@ -19,6 +19,24 @@ export function requireAuth(req, res, next) {
   }
 }
 
+export function optionalAuth(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return next();
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const payload = jwt.verify(token, env.jwtAccessSecret);
+    req.user = payload;
+  } catch {
+    req.user = undefined;
+  }
+
+  return next();
+}
+
 export const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) {
     return next(new AppError("Unauthorized", 401));

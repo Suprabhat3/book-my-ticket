@@ -62,10 +62,15 @@ function buildTicketSvg(booking: BookingDetails, qrHref: string) {
   const showTime = formatDateTime(booking.show.startTime);
   const bookingStatus = booking.status;
   const paymentStatus = booking.payment?.status || "N/A";
-  const qrUrl = qrHref;
+
+  // Left content area: x=60 to x=840 (width=780), Right QR sidebar: x=876 to x=1140
+  // 3 info columns so each has enough room:
+  //   Col A (Theater+Screen):        x=60,  w=250  → clips at x=310
+  //   Col B (Show Time+Seats):       x=334, w=220  → clips at x=554
+  //   Col C (Status+Payment):        x=578, w=262  → clips at x=840
 
   return `
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
   <defs>
     <linearGradient id="ticketBg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#101828" />
@@ -75,48 +80,101 @@ function buildTicketSvg(booking: BookingDetails, qrHref: string) {
       <stop offset="0%" stop-color="#F59E0B" />
       <stop offset="100%" stop-color="#FBBF24" />
     </linearGradient>
+
+    <!-- Movie title: left area only -->
+    <clipPath id="titleClip">
+      <rect x="60" y="155" width="780" height="85" />
+    </clipPath>
+
+    <!-- Col A: Theater + Screen -->
+    <clipPath id="colAClip">
+      <rect x="60" y="268" width="250" height="175" />
+    </clipPath>
+
+    <!-- Col B: Show Time + Seats -->
+    <clipPath id="colBClip">
+      <rect x="334" y="268" width="220" height="175" />
+    </clipPath>
+
+    <!-- Col C: Booking Status + Payment -->
+    <clipPath id="colCClip">
+      <rect x="578" y="268" width="262" height="175" />
+    </clipPath>
+
+    <!-- Footer left: Booking ID + Issued (stops before PAID) -->
+    <clipPath id="footerClip">
+      <rect x="60" y="458" width="650" height="90" />
+    </clipPath>
   </defs>
 
-  <rect x="20" y="20" width="1160" height="600" rx="36" fill="url(#ticketBg)" />
-  <rect x="20" y="20" width="1160" height="600" rx="36" fill="none" stroke="#374151" stroke-width="2" />
+  <!-- ── Ticket background ── -->
+  <rect x="20" y="20" width="1160" height="560" rx="36" fill="url(#ticketBg)" />
+  <rect x="20" y="20" width="1160" height="560" rx="36" fill="none" stroke="#374151" stroke-width="2" />
 
-  <circle cx="20" cy="320" r="28" fill="#ffffff"/>
-  <circle cx="1180" cy="320" r="28" fill="#ffffff"/>
+  <!-- Tear notches -->
+  <circle cx="20"   cy="300" r="28" fill="#ffffff" />
+  <circle cx="1180" cy="300" r="28" fill="#ffffff" />
 
-  <rect x="60" y="60" width="1080" height="88" rx="20" fill="url(#accent)"/>
-  <text x="95" y="114" fill="#1f2937" font-size="40" font-family="Arial, Helvetica, sans-serif" font-weight="700">BOOK Suprabhat's Ticket</text>
-  <text x="940" y="114" fill="#1f2937" font-size="26" font-family="Arial, Helvetica, sans-serif" font-weight="700">E-TICKET</text>
+  <!-- Perforated vertical divider (content | QR) -->
+  <line x1="860" y1="48" x2="860" y2="552" stroke="#4B5563" stroke-dasharray="8 8" stroke-width="1.5" />
 
-  <text x="80" y="220" fill="#D1D5DB" font-size="24" font-family="Arial, Helvetica, sans-serif">MOVIE</text>
-  <text x="80" y="266" fill="#F9FAFB" font-size="46" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(booking.show.movie.title)}</text>
+  <!-- ── Header banner ── -->
+  <rect x="60" y="48" width="1080" height="84" rx="20" fill="url(#accent)" />
+  <text x="92" y="102" fill="#1f2937" font-size="38" font-family="Arial, Helvetica, sans-serif" font-weight="700">Book Suprabhat's Ticket</text>
+  <text x="1128" y="102" text-anchor="end" fill="#1f2937" font-size="24" font-family="Arial, Helvetica, sans-serif" font-weight="700">E-TICKET</text>
 
-  <line x1="80" y1="318" x2="1120" y2="318" stroke="#4B5563" stroke-dasharray="10 10" />
+  <!-- ── Movie section ── -->
+  <text x="60" y="170" fill="#9CA3AF" font-size="15" font-family="Arial, Helvetica, sans-serif" letter-spacing="4">MOVIE</text>
+  <g clip-path="url(#titleClip)">
+    <text x="60" y="222" fill="#F9FAFB" font-size="44" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(booking.show.movie.title)}</text>
+  </g>
 
-  <text x="80" y="380" fill="#9CA3AF" font-size="22" font-family="Arial, Helvetica, sans-serif">THEATER</text>
-  <text x="80" y="414" fill="#F9FAFB" font-size="30" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(booking.show.theater.name)}</text>
+  <!-- Dashed separator below movie title -->
+  <line x1="60" y1="252" x2="1140" y2="252" stroke="#4B5563" stroke-dasharray="10 10" stroke-width="1.5" />
 
-  <text x="80" y="456" fill="#9CA3AF" font-size="22" font-family="Arial, Helvetica, sans-serif">SCREEN</text>
-  <text x="80" y="490" fill="#F9FAFB" font-size="28" font-family="Arial, Helvetica, sans-serif">${escapeSvg(booking.show.screen.name)}</text>
+  <!-- ── Info columns ── -->
 
-  <text x="520" y="380" fill="#9CA3AF" font-size="22" font-family="Arial, Helvetica, sans-serif">SHOW TIME</text>
-  <text x="520" y="414" fill="#F9FAFB" font-size="28" font-family="Arial, Helvetica, sans-serif">${escapeSvg(showTime)}</text>
+  <!-- Col A: Theater + Screen -->
+  <g clip-path="url(#colAClip)">
+    <text x="60" y="290" fill="#9CA3AF" font-size="14" font-family="Arial, Helvetica, sans-serif" letter-spacing="3">THEATER</text>
+    <text x="60" y="322" fill="#F9FAFB" font-size="23" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(booking.show.theater.name)}</text>
+    <text x="60" y="356" fill="#94A3B8" font-size="18" font-family="Arial, Helvetica, sans-serif">${escapeSvg(booking.show.screen.name)}</text>
+  </g>
 
-  <text x="520" y="456" fill="#9CA3AF" font-size="22" font-family="Arial, Helvetica, sans-serif">SEATS</text>
-  <text x="520" y="490" fill="#F9FAFB" font-size="28" font-family="Arial, Helvetica, sans-serif">${escapeSvg(seats)}</text>
+  <!-- Col B: Show Time (top) + Seats (bottom) -->
+  <g clip-path="url(#colBClip)">
+    <text x="334" y="290" fill="#9CA3AF" font-size="14" font-family="Arial, Helvetica, sans-serif" letter-spacing="3">SHOW TIME</text>
+    <text x="334" y="322" fill="#F9FAFB" font-size="23" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(showTime)}</text>
+    <text x="334" y="370" fill="#9CA3AF" font-size="14" font-family="Arial, Helvetica, sans-serif" letter-spacing="3">SEATS</text>
+    <text x="334" y="402" fill="#FBBF24" font-size="23" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(seats)}</text>
+  </g>
 
-  <text x="760" y="380" fill="#9CA3AF" font-size="22" font-family="Arial, Helvetica, sans-serif">BOOKING STATUS</text>
-  <text x="760" y="414" fill="#F9FAFB" font-size="28" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(bookingStatus)}</text>
+  <!-- Col C: Booking Status (top) + Payment (bottom) -->
+  <g clip-path="url(#colCClip)">
+    <text x="578" y="290" fill="#9CA3AF" font-size="14" font-family="Arial, Helvetica, sans-serif" letter-spacing="3">BOOKING STATUS</text>
+    <text x="578" y="322" fill="#F9FAFB" font-size="23" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(bookingStatus)}</text>
+    <text x="578" y="370" fill="#9CA3AF" font-size="14" font-family="Arial, Helvetica, sans-serif" letter-spacing="3">PAYMENT</text>
+    <text x="578" y="402" fill="#34D399" font-size="23" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(paymentStatus)}</text>
+  </g>
 
-  <text x="760" y="456" fill="#9CA3AF" font-size="22" font-family="Arial, Helvetica, sans-serif">PAYMENT</text>
-  <text x="760" y="490" fill="#34D399" font-size="28" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(paymentStatus)}</text>
+  <!-- ── QR sidebar ── -->
+  <!-- White card centred in right sidebar; sidebar = x 876–1140 = 264 px wide -->
+  <!-- Card: 220×220, centred → x = 876 + (264-220)/2 = 898 -->
+  <rect x="898" y="152" width="220" height="220" rx="16" fill="#ffffff" />
+  <image x="909" y="163" width="198" height="198" href="${escapeSvg(qrHref)}" />
+  <text x="1008" y="394" text-anchor="middle" fill="#9CA3AF" font-size="15" font-family="Arial, Helvetica, sans-serif">Scan to verify</text>
 
-  <rect x="932" y="188" width="176" height="176" rx="16" fill="#ffffff" />
-  <image x="940" y="196" width="160" height="160" href="${escapeSvg(qrUrl)}" />
+  <!-- ── Footer ── -->
+  <line x1="60" y1="450" x2="1140" y2="450" stroke="#4B5563" stroke-width="1.5" />
 
-  <line x1="80" y1="530" x2="1120" y2="530" stroke="#4B5563" />
+  <!-- Footer left: Booking ID + Issued At (clipped so they don't reach PAID) -->
+  <g clip-path="url(#footerClip)">
+    <text x="60" y="478" fill="#6B7280" font-size="16" font-family="Arial, Helvetica, sans-serif">Booking ID: ${escapeSvg(booking.id)}</text>
+    <text x="60" y="504" fill="#9CA3AF" font-size="16" font-family="Arial, Helvetica, sans-serif">Issued: ${escapeSvg(issuedAt)}</text>
+  </g>
 
-  <text x="80" y="575" fill="#9CA3AF" font-size="22" font-family="Arial, Helvetica, sans-serif">ISSUED AT ${escapeSvg(issuedAt)}</text>
-  <text x="850" y="575" fill="#FBBF24" font-size="40" font-family="Arial, Helvetica, sans-serif" font-weight="700">PAID: Rs. ${escapeSvg(String(booking.totalAmount))}</text>
+  <!-- Footer right: PAID – anchored to right edge, vertically centred between separator and bottom -->
+  <text x="1140" y="500" text-anchor="end" fill="#FBBF24" font-size="34" font-family="Arial, Helvetica, sans-serif" font-weight="700">PAID: Rs. ${escapeSvg(String(booking.totalAmount))}</text>
 </svg>`;
 }
 

@@ -60,6 +60,7 @@ type ShowSeatRecord = {
   price: string;
   status: SeatBookingStatus;
   lockedUntil: string | null;
+  isLockedByCurrentUser?: boolean;
   screenSeat: {
     id: number;
     rowLabel: string;
@@ -163,9 +164,12 @@ type BookingDetails = {
 };
 
 export class UserApiError extends Error {
-  constructor(message: string) {
+  statusCode?: number;
+
+  constructor(message: string, statusCode?: number) {
     super(message);
     this.name = "UserApiError";
+    this.statusCode = statusCode;
   }
 }
 
@@ -178,7 +182,7 @@ async function parseResponse<T>(response: Response): Promise<ApiResponse<T>> {
   }
 
   if (!response.ok || !payload.success) {
-    throw new UserApiError(payload.message || "Request failed");
+    throw new UserApiError(payload.message || "Request failed", response.status);
   }
 
   return payload;
@@ -234,14 +238,61 @@ export async function fetchPublicShows(params: {
   return parsed.data || [];
 }
 
-export async function fetchPublicShowSeatMap(showId: number): Promise<PublicShowSeatMap> {
+export async function fetchPublicShowSeatMap(showId: number, accessToken?: string | null): Promise<PublicShowSeatMap> {
   const response = await fetch(`${API_BASE_URL}/shows/public/${showId}/seats`, {
+    headers: {
+      ...buildAuthHeaders(accessToken),
+    },
     cache: "no-store",
   });
 
   const parsed = await parseResponse<PublicShowSeatMap>(response);
   if (!parsed.data) {
     throw new UserApiError("Show not found");
+  }
+
+  return parsed.data;
+}
+
+export async function lockShowSeats(
+  accessToken: string,
+  payload: { showId: number; showSeatIds: number[] },
+): Promise<{ showId: number; showSeatIds: number[]; seatHoldExpiresAt: string }> {
+  const response = await fetch(`${API_BASE_URL}/shows/${payload.showId}/seat-locks`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(accessToken),
+    },
+    body: JSON.stringify({ showSeatIds: payload.showSeatIds }),
+    cache: "no-store",
+  });
+
+  const parsed = await parseResponse<{ showId: number; showSeatIds: number[]; seatHoldExpiresAt: string }>(response);
+  if (!parsed.data) {
+    throw new UserApiError("Failed to lock selected seats");
+  }
+
+  return parsed.data;
+}
+
+export async function unlockShowSeats(
+  accessToken: string,
+  payload: { showId: number; showSeatIds: number[] },
+): Promise<{ showId: number; releasedCount: number; showSeatIds: number[] }> {
+  const response = await fetch(`${API_BASE_URL}/shows/${payload.showId}/seat-locks`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(accessToken),
+    },
+    body: JSON.stringify({ showSeatIds: payload.showSeatIds }),
+    cache: "no-store",
+  });
+
+  const parsed = await parseResponse<{ showId: number; releasedCount: number; showSeatIds: number[] }>(response);
+  if (!parsed.data) {
+    throw new UserApiError("Failed to release selected seats");
   }
 
   return parsed.data;

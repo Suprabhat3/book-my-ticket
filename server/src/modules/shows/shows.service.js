@@ -1,6 +1,8 @@
 import { prisma } from "../../db/prisma.js";
 import { AppError } from "../../common/utils/app-error.js";
 
+const SEAT_HOLD_MINUTES = 5;
+
 function resolveSeatPrice(basePrice, pricingProfile, seatType) {
   if (!pricingProfile || typeof pricingProfile !== "object") {
     return basePrice;
@@ -29,6 +31,7 @@ async function releaseExpiredSeatLocks(tx, showId) {
     data: {
       status: "AVAILABLE",
       lockedUntil: null,
+      lockedByUserId: null,
     },
   });
 }
@@ -68,13 +71,25 @@ async function ensureShowSeatsExist(tx, show) {
 }
 
 export async function listShows({ movieId, theaterId, screenId, status, publicOnly = false }) {
+  const now = new Date();
+
   return prisma.show.findMany({
     where: {
       ...(movieId ? { movieId } : {}),
       ...(theaterId ? { theaterId } : {}),
       ...(screenId ? { screenId } : {}),
       ...(status ? { status } : {}),
-      ...(publicOnly ? { status: "SCHEDULED", movie: { isActive: true }, theater: { isActive: true }, screen: { isActive: true } } : {}),
+      ...(publicOnly
+        ? {
+            status: "SCHEDULED",
+            startTime: {
+              gt: now,
+            },
+            movie: { isActive: true },
+            theater: { isActive: true },
+            screen: { isActive: true },
+          }
+        : {}),
     },
     include: {
       movie: {
@@ -240,14 +255,132 @@ export async function deleteShow(id) {
   });
 }
 
-export async function getPublicShowSeatMap(showId) {
+export async function lockShowSeats({ showId, userId, showSeatIds }) {
   return prisma.$transaction(async (tx) => {
+    const show = await tx.show.findUnique({
+      where: { id: showId },
+      select: {
+        id: true,
+        status: true,
+        startTime: true,
+        screen: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!show || show.status !== "SCHEDULED") {
+      throw new AppError("Show is not available for booking", 400);
+    }
+
+    if (show.startTime <= new Date()) {
+      throw new AppError("Show has already started", 400);
+    }
+
+    await ensureShowSeatsExist(tx, show);
+    await releaseExpiredSeatLocks(tx, showId);
+
+    const seats = await tx.showSeat.findMany({
+      where: {
+        id: { in: showSeatIds },
+        showId,
+      },
+      select: {
+        id: true,
+        status: true,
+        lockedByUserId: true,
+        screenSeat: {
+          select: {
+            seatLabel: true,
+          },
+        },
+      },
+    });
+
+    if (seats.length !== showSeatIds.length) {
+      throw new AppError("One or more seats are invalid for this show", 400);
+    }
+
+    const hasConflict = seats.some(
+      (seat) => seat.status === "BOOKED" || (seat.status === "LOCKED" && seat.lockedByUserId !== userId),
+    );
+    if (hasConflict) {
+      throw new AppError("Some selected seats are no longer available", 409);
+    }
+
+    const holdUntil = new Date(Date.now() + SEAT_HOLD_MINUTES * 60 * 1000);
+
+    for (const seat of seats) {
+      const lockResult = await tx.showSeat.updateMany({
+        where: {
+          id: seat.id,
+          OR: [
+            { status: "AVAILABLE" },
+            {
+              status: "LOCKED",
+              lockedByUserId: userId,
+            },
+          ],
+        },
+        data: {
+          status: "LOCKED",
+          lockedUntil: holdUntil,
+          lockedByUserId: userId,
+        },
+      });
+
+      if (lockResult.count !== 1) {
+        throw new AppError("Some selected seats were just booked by another user", 409);
+      }
+    }
+
+    return {
+      showId,
+      showSeatIds,
+      seatHoldExpiresAt: holdUntil,
+    };
+  });
+}
+
+export async function unlockShowSeats({ showId, userId, showSeatIds }) {
+  const releaseResult = await prisma.showSeat.updateMany({
+    where: {
+      showId,
+      id: {
+        in: showSeatIds,
+      },
+      status: "LOCKED",
+      lockedByUserId: userId,
+    },
+    data: {
+      status: "AVAILABLE",
+      lockedUntil: null,
+      lockedByUserId: null,
+    },
+  });
+
+  return {
+    showId,
+    releasedCount: releaseResult.count,
+    showSeatIds,
+  };
+}
+
+export async function getPublicShowSeatMap(showId, requesterUserId) {
+  return prisma.$transaction(async (tx) => {
+    const now = new Date();
+
     await releaseExpiredSeatLocks(tx, showId);
 
     const show = await tx.show.findFirst({
       where: {
         id: showId,
         status: "SCHEDULED",
+        startTime: {
+          gt: now,
+        },
         movie: { isActive: true },
         theater: { isActive: true },
         screen: { isActive: true },
@@ -286,7 +419,7 @@ export async function getPublicShowSeatMap(showId) {
     });
 
     if (!show) {
-      throw new AppError("Show not found", 404);
+      throw new AppError("Show has already started", 400);
     }
 
     await ensureShowSeatsExist(tx, show);
@@ -307,9 +440,18 @@ export async function getPublicShowSeatMap(showId) {
       orderBy: [{ screenSeat: { rowLabel: "asc" } }, { screenSeat: { seatNumber: "asc" } }],
     });
 
+    const seatsWithLockOwnership = seats.map((seat) => {
+      const { lockedByUserId, ...seatWithoutOwner } = seat;
+      return {
+        ...seatWithoutOwner,
+        isLockedByCurrentUser:
+          seat.status === "LOCKED" && Boolean(requesterUserId) && lockedByUserId === requesterUserId,
+      };
+    });
+
     return {
       ...show,
-      seats,
+      seats: seatsWithLockOwnership,
     };
   });
 }

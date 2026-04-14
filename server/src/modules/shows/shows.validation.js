@@ -59,3 +59,23 @@ export const showIdParamSchema = z.object({
   }),
   query: z.object({}).optional(),
 });
+
+const seatLockBodySchema = z.object({
+  showSeatIds: z.array(z.coerce.number().int().positive()).min(1).max(10),
+});
+
+export const lockShowSeatsSchema = z.object({
+  body: seatLockBodySchema,
+  params: z.object({
+    id: z.coerce.number().int().positive(),
+  }),
+  query: z.object({}).optional(),
+});
+
+export const unlockShowSeatsSchema = z.object({
+  body: seatLockBodySchema,
+  params: z.object({
+    id: z.coerce.number().int().positive(),
+  }),
+  query: z.object({}).optional(),
+});

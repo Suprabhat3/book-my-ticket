@@ -34,11 +34,37 @@ export const listPublicShows = asyncHandler(async (req, res) => {
 });
 
 export const getPublicShowSeatMap = asyncHandler(async (req, res) => {
-  const show = await showsService.getPublicShowSeatMap(req.validated.params.id);
+  const show = await showsService.getPublicShowSeatMap(req.validated.params.id, req.user?.sub);
 
   return sendSuccess(res, {
     message: "Show seat map fetched successfully",
     data: show,
+  });
+});
+
+export const lockShowSeats = asyncHandler(async (req, res) => {
+  const payload = await showsService.lockShowSeats({
+    showId: req.validated.params.id,
+    userId: req.user.sub,
+    showSeatIds: req.validated.body.showSeatIds,
+  });
+
+  return sendSuccess(res, {
+    message: "Seats locked successfully",
+    data: payload,
+  });
+});
+
+export const unlockShowSeats = asyncHandler(async (req, res) => {
+  const payload = await showsService.unlockShowSeats({
+    showId: req.validated.params.id,
+    userId: req.user.sub,
+    showSeatIds: req.validated.body.showSeatIds,
+  });
+
+  return sendSuccess(res, {
+    message: "Seats released successfully",
+    data: payload,
   });
 });
 

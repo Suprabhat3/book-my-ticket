@@ -86,7 +86,7 @@ export default function CheckoutPage() {
       try {
         setError("");
         setIsLoading(true);
-        const data = await fetchPublicShowSeatMap(showId);
+        const data = await fetchPublicShowSeatMap(showId, getAccessToken());
         setShowData(data);
       } catch (loadError) {
         const message =

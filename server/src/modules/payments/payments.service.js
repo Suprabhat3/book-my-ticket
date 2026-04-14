@@ -75,7 +75,12 @@ function assertBookingAccess(booking, requestUser) {
 
 function hasSeatLockExpired(lockedSeats, now = new Date()) {
   return lockedSeats.some(
-    (seat) => seat.status !== "LOCKED" || !seat.lockedUntil || seat.lockedUntil < now,
+    (seat) =>
+      seat.status !== "LOCKED" ||
+      !seat.lockedUntil ||
+      seat.lockedUntil < now ||
+      !seat.lockedByUserId ||
+      seat.lockedByUserId !== seat.expectedUserId,
   );
 }
 
@@ -99,6 +104,7 @@ async function markBookingFailedAndReleaseSeats(tx, booking) {
     data: {
       status: "AVAILABLE",
       lockedUntil: null,
+      lockedByUserId: null,
     },
   });
 }
@@ -147,10 +153,16 @@ async function finalizePayment({ bookingId, requestUser, isSuccess, paymentId, o
         id: true,
         lockedUntil: true,
         status: true,
+        lockedByUserId: true,
       },
     });
 
-    if (hasSeatLockExpired(lockedSeats)) {
+    const lockedSeatsWithOwner = lockedSeats.map((seat) => ({
+      ...seat,
+      expectedUserId: booking.userId,
+    }));
+
+    if (hasSeatLockExpired(lockedSeatsWithOwner)) {
       await markBookingFailedAndReleaseSeats(tx, booking);
       throw new AppError("Seat hold has expired. Please retry booking.", 409);
     }
@@ -180,6 +192,7 @@ async function finalizePayment({ bookingId, requestUser, isSuccess, paymentId, o
         data: {
           status: "BOOKED",
           lockedUntil: null,
+          lockedByUserId: null,
         },
       });
     } else {
@@ -205,6 +218,7 @@ async function finalizePayment({ bookingId, requestUser, isSuccess, paymentId, o
         data: {
           status: "AVAILABLE",
           lockedUntil: null,
+          lockedByUserId: null,
         },
       });
     }
@@ -249,10 +263,16 @@ export async function createRazorpayOrder({ bookingId, requestUser }) {
       id: true,
       lockedUntil: true,
       status: true,
+      lockedByUserId: true,
     },
   });
 
-  if (hasSeatLockExpired(lockedSeats)) {
+  const lockedSeatsWithOwner = lockedSeats.map((seat) => ({
+    ...seat,
+    expectedUserId: booking.userId,
+  }));
+
+  if (hasSeatLockExpired(lockedSeatsWithOwner)) {
     await prisma.$transaction(async (tx) => {
       await markBookingFailedAndReleaseSeats(tx, booking);
     });
