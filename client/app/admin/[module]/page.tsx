@@ -4,7 +4,13 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
-import { createModuleItem, fetchModuleItems, updateModuleItem } from "@/lib/admin-api";
+import {
+  createModuleItem,
+  fetchModuleItems,
+  fetchScreenSeatTypeSummary,
+  ScreenSeatType,
+  updateModuleItem,
+} from "@/lib/admin-api";
 import { AdminModuleKey, getAdminModuleByKey } from "@/lib/admin-modules";
 import { getAccessToken } from "@/lib/auth-storage";
 import { uploadMoviePosterToImageKit } from "@/lib/imagekit-upload";
@@ -15,9 +21,43 @@ type ItemRecord = Record<string, unknown>;
 type CityOption = { id: number; name: string };
 type TheaterOption = { id: number; name: string; cityId: number };
 type ScreenOption = { id: number; name: string; theaterId: number };
-type MovieOption = { id: number; title: string };
-type ShowAssignment = { theaterId: string; screenId: string };
+type MovieOption = { id: number; title: string; durationMinutes: number };
+type SeatTypePriceMap = Partial<Record<ScreenSeatType, string>>;
+type ShowAssignment = {
+  theaterId: string;
+  screenId: string;
+  seatTypePrices: SeatTypePriceMap;
+  availableSeatTypes: ScreenSeatType[];
+  loadingSeatTypes: boolean;
+};
 type PosterVariant = "vertical" | "horizontal";
+
+const seatTypeLabelMap: Record<ScreenSeatType, string> = {
+  REGULAR: "Regular",
+  COUPLE: "Couple",
+  RECLINER: "Recliner",
+};
+
+function createEmptyShowAssignment(): ShowAssignment {
+  return {
+    theaterId: "",
+    screenId: "",
+    seatTypePrices: {},
+    availableSeatTypes: [],
+    loadingSeatTypes: false,
+  };
+}
+
+function calculateShowEndTime(startTimeLocal: string, durationMinutes: number) {
+  const start = new Date(startTimeLocal);
+  if (!startTimeLocal || Number.isNaN(start.getTime()) || durationMinutes <= 0) {
+    return "";
+  }
+
+  const end = new Date(start.getTime() + (durationMinutes + 20) * 60 * 1000);
+  end.setMinutes(end.getMinutes() - end.getTimezoneOffset());
+  return end.toISOString().slice(0, 16);
+}
 
 function normalizeFormValue(key: string, value: string): unknown {
   const numberFields = new Set([
@@ -121,9 +161,7 @@ export default function AdminModulePage() {
     vertical: null,
     horizontal: null,
   });
-  const [showAssignments, setShowAssignments] = useState<ShowAssignment[]>([
-    { theaterId: "", screenId: "" },
-  ]);
+  const [showAssignments, setShowAssignments] = useState<ShowAssignment[]>([createEmptyShowAssignment()]);
   const [showForm, setShowForm] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | number | null>(null);
 
@@ -271,11 +309,13 @@ export default function AdminModulePage() {
             (movie) =>
               typeof movie.id === "number" &&
               typeof movie.title === "string" &&
+              typeof movie.durationMinutes === "number" &&
               (movie.isActive === undefined || movie.isActive === true),
           )
           .map((movie) => ({
             id: movie.id as number,
             title: movie.title as string,
+            durationMinutes: movie.durationMinutes as number,
           }));
 
         setMovieOptions(mapped);
@@ -313,8 +353,126 @@ export default function AdminModulePage() {
     void loadItems();
   }, [moduleKey]);
 
+  useEffect(() => {
+    if (moduleKey !== "shows") return;
+
+    const movieId = Number(formState.movieId || "");
+    const startTime = formState.startTime || "";
+
+    if (!Number.isFinite(movieId) || movieId <= 0 || !startTime) {
+      setFormState((previous) => ({ ...previous, endTime: "" }));
+      return;
+    }
+
+    const selectedMovie = movieOptions.find((movie) => movie.id === movieId);
+    if (!selectedMovie) {
+      setFormState((previous) => ({ ...previous, endTime: "" }));
+      return;
+    }
+
+    const calculatedEndTime = calculateShowEndTime(startTime, selectedMovie.durationMinutes);
+    setFormState((previous) =>
+      previous.endTime === calculatedEndTime ? previous : { ...previous, endTime: calculatedEndTime },
+    );
+  }, [moduleKey, movieOptions, formState.movieId, formState.startTime]);
+
   const handleInputChange = (key: string, value: string) => {
     setFormState((previous) => ({ ...previous, [key]: value }));
+  };
+
+  const loadSeatTypesForAssignment = async (
+    assignmentIndex: number,
+    screenId: string,
+    presetPrices?: SeatTypePriceMap,
+  ) => {
+    const parsedScreenId = Number(screenId);
+    if (!Number.isFinite(parsedScreenId) || parsedScreenId <= 0) {
+      return;
+    }
+
+    try {
+      setShowAssignments((previous) =>
+        previous.map((row, rowIndex) =>
+          rowIndex === assignmentIndex
+            ? {
+                ...row,
+                loadingSeatTypes: true,
+                availableSeatTypes: [],
+                seatTypePrices: presetPrices || row.seatTypePrices,
+              }
+            : row,
+        ),
+      );
+
+      const token = getAccessToken();
+      const summary = await fetchScreenSeatTypeSummary(parsedScreenId, token);
+      const seatTypes = summary.seatTypes || [];
+
+      setShowAssignments((previous) =>
+        previous.map((row, rowIndex) => {
+          if (rowIndex !== assignmentIndex || row.screenId !== screenId) {
+            return row;
+          }
+
+          const nextPrices: SeatTypePriceMap = {};
+          for (const seatType of seatTypes) {
+            nextPrices[seatType] =
+              (presetPrices && presetPrices[seatType]) || row.seatTypePrices[seatType] || "";
+          }
+
+          return {
+            ...row,
+            loadingSeatTypes: false,
+            availableSeatTypes: seatTypes,
+            seatTypePrices: nextPrices,
+          };
+        }),
+      );
+    } catch (seatTypeError) {
+      setShowAssignments((previous) =>
+        previous.map((row, rowIndex) =>
+          rowIndex === assignmentIndex && row.screenId === screenId
+            ? { ...row, loadingSeatTypes: false, availableSeatTypes: [] }
+            : row,
+        ),
+      );
+      const message = seatTypeError instanceof Error ? seatTypeError.message : "Unable to load seat types for selected screen.";
+      setError(message);
+    }
+  };
+
+  const buildShowPricingPayload = (assignment: ShowAssignment, rowIndex: number) => {
+    if (assignment.availableSeatTypes.length === 0) {
+      throw new ApiError(`Row ${rowIndex + 1}: select a screen with active seats.`);
+    }
+
+    const resolvedPrices: Partial<Record<ScreenSeatType, number>> = {};
+    for (const seatType of assignment.availableSeatTypes) {
+      const rawValue = (assignment.seatTypePrices[seatType] || "").trim();
+      if (!rawValue) {
+        throw new ApiError(`Row ${rowIndex + 1}: enter price for ${seatTypeLabelMap[seatType]} seats.`);
+      }
+
+      const numericValue = Number(rawValue);
+      if (!Number.isFinite(numericValue) || numericValue <= 0) {
+        throw new ApiError(`Row ${rowIndex + 1}: ${seatTypeLabelMap[seatType]} price must be greater than 0.`);
+      }
+
+      resolvedPrices[seatType] = numericValue;
+    }
+
+    const basePrice = resolvedPrices.REGULAR || resolvedPrices.COUPLE || resolvedPrices.RECLINER;
+    if (!basePrice) {
+      throw new ApiError(`Row ${rowIndex + 1}: at least one valid seat price is required.`);
+    }
+
+    return {
+      basePrice,
+      pricingProfile: {
+        ...(resolvedPrices.COUPLE ? { couplePrice: resolvedPrices.COUPLE } : {}),
+        ...(resolvedPrices.RECLINER ? { reclinerPrice: resolvedPrices.RECLINER } : {}),
+      },
+    };
   };
 
   const setPosterPreviewUrl = (variant: PosterVariant, nextUrl: string) => {
@@ -395,13 +553,13 @@ export default function AdminModulePage() {
       if (moduleKey === "shows") {
         const movieId = (formState.movieId || "").trim();
         const startTime = (formState.startTime || "").trim();
-        const endTime = (formState.endTime || "").trim();
-        const basePrice = (formState.basePrice || "").trim();
-        const couplePrice = (formState.couplePrice || "").trim();
-        const reclinerPrice = (formState.reclinerPrice || "").trim();
+        const selectedMovie = movieOptions.find((movie) => String(movie.id) === movieId);
+        const endTime = selectedMovie
+          ? calculateShowEndTime(startTime, selectedMovie.durationMinutes)
+          : (formState.endTime || "").trim();
 
-        if (!movieId || !startTime || !endTime || !basePrice) {
-          throw new ApiError("Movie, start time, end time, and basic price are required.");
+        if (!movieId || !startTime || !endTime) {
+          throw new ApiError("Movie and start time are required.");
         }
 
         if (showAssignments.length === 0) {
@@ -409,7 +567,7 @@ export default function AdminModulePage() {
         }
 
         const uniqueCheck = new Set<string>();
-        for (const assignment of showAssignments) {
+        const showPayloads = showAssignments.map((assignment, index) => {
           if (!assignment.theaterId || !assignment.screenId) {
             throw new ApiError("Each row must have theater and screen selected.");
           }
@@ -419,41 +577,26 @@ export default function AdminModulePage() {
             throw new ApiError("Duplicate theater/screen pair selected.");
           }
           uniqueCheck.add(key);
-        }
 
-        const token = getAccessToken();
-        if (editingItemId) {
-          const assignment = showAssignments[0];
-          await updateModuleItem("shows", editingItemId, token, {
+          const pricing = buildShowPricingPayload(assignment, index);
+
+          return {
             movieId: normalizeFormValue("movieId", movieId),
             theaterId: normalizeFormValue("theaterId", assignment.theaterId),
             screenId: normalizeFormValue("screenId", assignment.screenId),
             startTime: normalizeFormValue("startTime", startTime),
             endTime: normalizeFormValue("endTime", endTime),
-            basePrice: normalizeFormValue("basePrice", basePrice),
-            pricingProfile: {
-              couplePrice: normalizeFormValue("basePrice", couplePrice),
-              reclinerPrice: normalizeFormValue("basePrice", reclinerPrice),
-            },
-          });
+            basePrice: pricing.basePrice,
+            pricingProfile: pricing.pricingProfile,
+          };
+        });
+
+        const token = getAccessToken();
+        if (editingItemId) {
+          await updateModuleItem("shows", editingItemId, token, showPayloads[0]);
           setSuccessMessage("Show updated successfully.");
         } else {
-          await Promise.all(
-            showAssignments.map((assignment) =>
-              createModuleItem("shows", token, {
-                movieId: normalizeFormValue("movieId", movieId),
-                theaterId: normalizeFormValue("theaterId", assignment.theaterId),
-                screenId: normalizeFormValue("screenId", assignment.screenId),
-                startTime: normalizeFormValue("startTime", startTime),
-                endTime: normalizeFormValue("endTime", endTime),
-                basePrice: normalizeFormValue("basePrice", basePrice),
-                pricingProfile: {
-                  couplePrice: normalizeFormValue("basePrice", couplePrice),
-                  reclinerPrice: normalizeFormValue("basePrice", reclinerPrice),
-                },
-              }),
-            ),
-          );
+          await Promise.all(showPayloads.map((payload) => createModuleItem("shows", token, payload)));
           setSuccessMessage("Shows created successfully for selected theater/screen entries.");
         }
 
@@ -462,11 +605,8 @@ export default function AdminModulePage() {
           movieId: "",
           startTime: "",
           endTime: "",
-          basePrice: "",
-          couplePrice: "",
-          reclinerPrice: "",
         }));
-        setShowAssignments([{ theaterId: "", screenId: "" }]);
+        setShowAssignments([createEmptyShowAssignment()]);
         await loadItems();
         setShowForm(false);
         setEditingItemId(null);
@@ -646,12 +786,6 @@ export default function AdminModulePage() {
       stateToSet.reclinerRows = String(layout.reclinerRows || 0);
     }
     
-    if (moduleKey === "shows" && item.pricingProfile) {
-      const pricing = item.pricingProfile as Record<string, any>;
-      stateToSet.couplePrice = String(pricing.couplePrice || "");
-      stateToSet.reclinerPrice = String(pricing.reclinerPrice || "");
-    }
-
     if (moduleKey === "movies") {
       stateToSet.posterVerticalUrl = (item.posterVerticalUrl as string) || "";
       stateToSet.posterHorizontalUrl = (item.posterHorizontalUrl as string) || "";
@@ -662,9 +796,27 @@ export default function AdminModulePage() {
     }
 
     if (moduleKey === "shows") {
+      const pricing = (item.pricingProfile || {}) as Record<string, unknown>;
+      const prefilledPrices: SeatTypePriceMap = {
+        REGULAR: String(item.basePrice || ""),
+        COUPLE: String(pricing.couplePrice || ""),
+        RECLINER: String(pricing.reclinerPrice || ""),
+      };
+      const screenId = String(item.screenId || "");
+
       setShowAssignments([
-        { theaterId: String(item.theaterId || ""), screenId: String(item.screenId || "") },
+        {
+          theaterId: String(item.theaterId || ""),
+          screenId,
+          seatTypePrices: prefilledPrices,
+          availableSeatTypes: [],
+          loadingSeatTypes: Boolean(screenId),
+        },
       ]);
+
+      if (screenId) {
+        void loadSeatTypesForAssignment(0, screenId, prefilledPrices);
+      }
     }
 
     if (moduleKey === "screens" || moduleKey === "shows") {
@@ -686,7 +838,7 @@ export default function AdminModulePage() {
     setFormState(reset);
     clearPosterPreviews();
     setSelectedScreenCityId("");
-    setShowAssignments([{ theaterId: "", screenId: "" }]);
+    setShowAssignments([createEmptyShowAssignment()]);
   };
 
   if (!moduleConfig) {
@@ -773,17 +925,6 @@ export default function AdminModulePage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-semibold text-on-surface">Base Price</label>
-                <input
-                  type="number"
-                  placeholder="250"
-                  value={formState.basePrice || ""}
-                  onChange={(event) => handleInputChange("basePrice", event.target.value)}
-                  className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
                 <label className="text-sm font-semibold text-on-surface">Start Time</label>
                 <input
                   type="datetime-local"
@@ -798,9 +939,10 @@ export default function AdminModulePage() {
                 <input
                   type="datetime-local"
                   value={formState.endTime || ""}
-                  onChange={(event) => handleInputChange("endTime", event.target.value)}
-                  className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+                  readOnly
+                  className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none opacity-80"
                 />
+                <p className="text-xs text-on-surface-variant">Auto-calculated as movie duration + 20 min interval</p>
               </div>
 
               <div className="md:col-span-2 mt-2">
@@ -808,9 +950,7 @@ export default function AdminModulePage() {
                   <h4 className="text-sm font-bold text-on-surface">Theater and Screen Assignments</h4>
                   <button
                     type="button"
-                    onClick={() =>
-                      setShowAssignments((previous) => [...previous, { theaterId: "", screenId: "" }])
-                    }
+                    onClick={() => setShowAssignments((previous) => [...previous, createEmptyShowAssignment()])}
                     className="clay-button-secondary px-3 py-2 rounded-lg text-xs font-bold"
                   >
                     Add Theater/Screen
@@ -821,71 +961,140 @@ export default function AdminModulePage() {
                   {showAssignments.map((assignment, index) => (
                     <div
                       key={index}
-                      className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end bg-surface-container-low rounded-xl p-3"
+                      className="bg-surface-container-low rounded-xl p-3 space-y-3"
                     >
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-on-surface-variant">Theater</label>
-                        <select
-                          value={assignment.theaterId}
-                          onChange={(event) =>
+                      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+                        <div className="flex flex-col gap-2">
+                          <label className="text-xs font-semibold text-on-surface-variant">Theater</label>
+                          <select
+                            value={assignment.theaterId}
+                            onChange={(event) => {
+                              const nextTheaterId = event.target.value;
+                              setShowAssignments((previous) =>
+                                previous.map((row, rowIndex) =>
+                                  rowIndex === index
+                                    ? {
+                                        ...row,
+                                        theaterId: nextTheaterId,
+                                        screenId: "",
+                                        seatTypePrices: {},
+                                        availableSeatTypes: [],
+                                        loadingSeatTypes: false,
+                                      }
+                                    : row,
+                                ),
+                              );
+                            }}
+                            className="rounded-lg px-3 py-2 bg-surface border border-surface-container-high outline-none"
+                          >
+                            <option value="">Select Theater</option>
+                            {theaterOptions.map((theater) => (
+                              <option key={theater.id} value={String(theater.id)}>
+                                {theater.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <label className="text-xs font-semibold text-on-surface-variant">Screen</label>
+                          <select
+                            value={assignment.screenId}
+                            onChange={(event) => {
+                              const nextScreenId = event.target.value;
+                              setShowAssignments((previous) =>
+                                previous.map((row, rowIndex) =>
+                                  rowIndex === index
+                                    ? {
+                                        ...row,
+                                        screenId: nextScreenId,
+                                        seatTypePrices: {},
+                                        availableSeatTypes: [],
+                                        loadingSeatTypes: Boolean(nextScreenId),
+                                      }
+                                    : row,
+                                ),
+                              );
+
+                              if (nextScreenId) {
+                                void loadSeatTypesForAssignment(index, nextScreenId);
+                              }
+                            }}
+                            disabled={!assignment.theaterId}
+                            className="rounded-lg px-3 py-2 bg-surface border border-surface-container-high outline-none disabled:opacity-60"
+                          >
+                            <option value="">
+                              {assignment.theaterId ? "Select Screen" : "Select Theater First"}
+                            </option>
+                            {getScreensByTheater(assignment.theaterId).map((screen) => (
+                              <option key={screen.id} value={String(screen.id)}>
+                                {screen.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
                             setShowAssignments((previous) =>
-                              previous.map((row, rowIndex) =>
-                                rowIndex === index
-                                  ? { theaterId: event.target.value, screenId: "" }
-                                  : row,
-                              ),
+                              previous.length === 1
+                                ? previous
+                                : previous.filter((_, rowIndex) => rowIndex !== index),
                             )
                           }
-                          className="rounded-lg px-3 py-2 bg-surface border border-surface-container-high outline-none"
+                          disabled={showAssignments.length === 1}
+                          className="clay-button-secondary px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-60"
                         >
-                          <option value="">Select Theater</option>
-                          {theaterOptions.map((theater) => (
-                            <option key={theater.id} value={String(theater.id)}>
-                              {theater.name}
-                            </option>
-                          ))}
-                        </select>
+                          Remove
+                        </button>
                       </div>
 
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-on-surface-variant">Screen</label>
-                        <select
-                          value={assignment.screenId}
-                          onChange={(event) =>
-                            setShowAssignments((previous) =>
-                              previous.map((row, rowIndex) =>
-                                rowIndex === index ? { ...row, screenId: event.target.value } : row,
-                              ),
-                            )
-                          }
-                          disabled={!assignment.theaterId}
-                          className="rounded-lg px-3 py-2 bg-surface border border-surface-container-high outline-none disabled:opacity-60"
-                        >
-                          <option value="">
-                            {assignment.theaterId ? "Select Screen" : "Select Theater First"}
-                          </option>
-                          {getScreensByTheater(assignment.theaterId).map((screen) => (
-                            <option key={screen.id} value={String(screen.id)}>
-                              {screen.name}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold text-on-surface-variant">Seat Type Pricing</p>
+                        {assignment.loadingSeatTypes ? (
+                          <p className="text-xs text-on-surface-variant">Loading seat types...</p>
+                        ) : assignment.availableSeatTypes.length === 0 ? (
+                          <p className="text-xs text-on-surface-variant">
+                            {assignment.screenId
+                              ? "No active seat types found for selected screen."
+                              : "Choose a screen to enter pricing."}
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {assignment.availableSeatTypes.map((seatType) => (
+                              <div key={seatType} className="flex flex-col gap-2">
+                                <label className="text-xs font-semibold text-on-surface-variant">
+                                  {seatTypeLabelMap[seatType]} Price
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  placeholder="250"
+                                  value={assignment.seatTypePrices[seatType] || ""}
+                                  onChange={(event) => {
+                                    const nextValue = event.target.value;
+                                    setShowAssignments((previous) =>
+                                      previous.map((row, rowIndex) =>
+                                        rowIndex === index
+                                          ? {
+                                              ...row,
+                                              seatTypePrices: {
+                                                ...row.seatTypePrices,
+                                                [seatType]: nextValue,
+                                              },
+                                            }
+                                          : row,
+                                      ),
+                                    );
+                                  }}
+                                  className="rounded-lg px-3 py-2 bg-surface border border-surface-container-high outline-none"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowAssignments((previous) =>
-                            previous.length === 1
-                              ? previous
-                              : previous.filter((_, rowIndex) => rowIndex !== index),
-                          )
-                        }
-                        disabled={showAssignments.length === 1}
-                        className="clay-button-secondary px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-60"
-                      >
-                        Remove
-                      </button>
                     </div>
                   ))}
                 </div>

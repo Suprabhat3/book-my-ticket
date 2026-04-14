@@ -168,20 +168,59 @@ export async function updateShow(id, payload) {
     throw new AppError("Show not found", 404);
   }
 
-  return prisma.show.update({
-    where: { id },
-    data: {
-      ...(payload.startTime !== undefined ? { startTime: payload.startTime } : {}),
-      ...(payload.endTime !== undefined ? { endTime: payload.endTime } : {}),
-      ...(payload.basePrice !== undefined ? { basePrice: payload.basePrice } : {}),
-      ...(payload.pricingProfile !== undefined ? { pricingProfile: payload.pricingProfile } : {}),
-      ...(payload.status !== undefined ? { status: payload.status } : {}),
-    },
-    include: {
-      movie: { select: { id: true, title: true } },
-      theater: { select: { id: true, name: true, cityId: true } },
-      screen: { select: { id: true, name: true, screenType: true } },
-    },
+  const shouldRefreshSeatPrices = payload.basePrice !== undefined || payload.pricingProfile !== undefined;
+
+  return prisma.$transaction(async (tx) => {
+    const updatedShow = await tx.show.update({
+      where: { id },
+      data: {
+        ...(payload.startTime !== undefined ? { startTime: payload.startTime } : {}),
+        ...(payload.endTime !== undefined ? { endTime: payload.endTime } : {}),
+        ...(payload.basePrice !== undefined ? { basePrice: payload.basePrice } : {}),
+        ...(payload.pricingProfile !== undefined ? { pricingProfile: payload.pricingProfile } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+      },
+      include: {
+        movie: { select: { id: true, title: true } },
+        theater: { select: { id: true, name: true, cityId: true } },
+        screen: { select: { id: true, name: true, screenType: true } },
+      },
+    });
+
+    if (shouldRefreshSeatPrices) {
+      const basePriceToUse = Number(payload.basePrice ?? show.basePrice);
+      const pricingProfileToUse = payload.pricingProfile ?? show.pricingProfile;
+
+      const availableSeats = await tx.showSeat.findMany({
+        where: {
+          showId: id,
+          status: "AVAILABLE",
+        },
+        select: {
+          id: true,
+          screenSeat: {
+            select: {
+              seatType: true,
+            },
+          },
+        },
+      });
+
+      if (availableSeats.length) {
+        await Promise.all(
+          availableSeats.map((seat) =>
+            tx.showSeat.update({
+              where: { id: seat.id },
+              data: {
+                price: resolveSeatPrice(basePriceToUse, pricingProfileToUse, seat.screenSeat.seatType),
+              },
+            }),
+          ),
+        );
+      }
+    }
+
+    return updatedShow;
   });
 }
 

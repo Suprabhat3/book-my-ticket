@@ -162,3 +162,46 @@ export async function deactivateScreen(id) {
     data: { isActive: false },
   });
 }
+
+export async function getScreenSeatTypes(screenId) {
+  const screen = await prisma.screen.findUnique({
+    where: { id: screenId },
+    select: { id: true, isActive: true },
+  });
+
+  if (!screen || !screen.isActive) {
+    throw new AppError("Screen not found or inactive", 404);
+  }
+
+  const seats = await prisma.screenSeat.findMany({
+    where: {
+      screenId,
+      isActive: true,
+    },
+    select: {
+      seatType: true,
+    },
+  });
+
+  if (!seats.length) {
+    throw new AppError("No active seats found for this screen", 400);
+  }
+
+  const seatTypeCounts = seats.reduce(
+    (accumulator, seat) => {
+      const current = accumulator[seat.seatType] || 0;
+      accumulator[seat.seatType] = current + 1;
+      return accumulator;
+    },
+    {},
+  );
+
+  const preferredOrder = ["REGULAR", "COUPLE", "RECLINER"];
+  const seatTypes = preferredOrder.filter((seatType) => Number(seatTypeCounts[seatType]) > 0);
+
+  return {
+    screenId,
+    seatTypes,
+    seatTypeCounts,
+  };
+}

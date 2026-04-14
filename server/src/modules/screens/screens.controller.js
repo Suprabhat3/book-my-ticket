@@ -42,3 +42,12 @@ export const deleteScreen = asyncHandler(async (req, res) => {
     data: screen,
   });
 });
+
+export const getScreenSeatTypes = asyncHandler(async (req, res) => {
+  const payload = await screensService.getScreenSeatTypes(req.validated.params.id);
+
+  return sendSuccess(res, {
+    message: "Screen seat types fetched successfully",
+    data: payload,
+  });
+});

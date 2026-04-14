@@ -20,6 +20,14 @@ type ImageKitUploadAuth = {
   urlEndpoint: string;
 };
 
+export type ScreenSeatType = "REGULAR" | "COUPLE" | "RECLINER";
+
+export type ScreenSeatTypeSummary = {
+  screenId: number;
+  seatTypes: ScreenSeatType[];
+  seatTypeCounts: Partial<Record<ScreenSeatType, number>>;
+};
+
 let activeRefreshPromise: Promise<string> | null = null;
 
 function getSharedRefreshPromise() {
@@ -160,5 +168,19 @@ export async function fetchMovieUploadAuth(accessToken: string | null) {
   });
 
   const payload = await parseBackendResponse<ImageKitUploadAuth>(response);
+  return payload.data;
+}
+
+export async function fetchScreenSeatTypeSummary(
+  screenId: number,
+  accessToken: string | null,
+): Promise<ScreenSeatTypeSummary> {
+  const response = await requestWithAutoRefresh(`${API_BASE_URL}/screens/${screenId}/seat-types`, {
+    method: "GET",
+    headers: buildHeaders(accessToken),
+    credentials: "include",
+  });
+
+  const payload = await parseBackendResponse<ScreenSeatTypeSummary>(response);
   return payload.data;
 }
