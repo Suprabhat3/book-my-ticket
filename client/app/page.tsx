@@ -1,65 +1,68 @@
-import Image from "next/image";
+import { NavBar } from "@/components/NavBar";
+import { Hero } from "@/components/Hero";
+import { CategoryChips } from "@/components/CategoryChips";
+import { MovieCard } from "@/components/MovieCard";
+import { ExperiencePromo } from "@/components/ExperiencePromo";
+import { Footer } from "@/components/Footer";
+
+const movies = [
+  {
+    title: "Midnight Echo",
+    genre: "Action",
+    duration: "2h 15m",
+    rating: "4.8",
+    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDqGwckytoN4_rnqBi5FvEvo6r_Hj4iGIDAU6-yjd_CZ4DmBQDtzQx2pguEDQ7zmRtxlg9VeWGnIzqAOki6WxwxcBmuaiuTjRu2aeF0ITZLnyO8TyeCjwvGdAEixK3s435JY_eSx6I3q4qXWrF_uz3Y6zbkDAN6VZq8uouwD7pAlxCYsg3qY_Zz1_-WwdkDQtKx8i6HXhWiftXtq9dZWpXulghOcvXcLJs4I95cXwxwuDKlln3Mqgy26MiE2NV2cZEp89t0j28XOf8"
+  },
+  {
+    title: "Stellar Journey",
+    genre: "Sci-Fi",
+    duration: "2h 45m",
+    rating: "4.9",
+    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuB3Q2t8E0gT-qgNbCUZhIbVO2-Vzr2iKtA3RgA9qvoz8NqFGlUoRZrgGuPNFm75fC4kW9tvYJ4c4uGfra-bIjOJcCRtjOTSZrCNJslbFSEv39rE_jzZod7yKa4kx1cc2wAwzdxeQfuYArpjzPiQAK_82b-PI7RkLwZzh9va3pW77aNbywIvQ7I7P6O5b5zW9Z8NyzJ03m29cRI_dMXiYv6-LAbdXK8_adpcKzSy7FVB44faR4oR8LXGOmXCU6m9VSUYjrLOVNEy-Og"
+  },
+  {
+    title: "The Silent Woods",
+    genre: "Thriller",
+    duration: "1h 58m",
+    rating: "4.5",
+    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDHc95qilMXzh3ZeAcevtf8eSfutof8ibOCsyzcyHpMquKEjYVHgKsrtX2JnDXW4gGzhn56Gx8hMXB11onSKPzMgK_B0eeIU44oFoqaCjKZ_VH1YYBrT9c-mQh5rHn-6mhWmD-end54_2098NqE9byInoZ199-U0gWso94fES4O8oavi_O0HqHoEmycYzRjZ4QkLilKrCkgS7syt5hK_7KODuTxfSf3VVBnUB-XG_pS9GYu5I3XaXd9olwrELmXABBCqZD_NQjsaPU"
+  },
+  {
+    title: "Crafty World",
+    genre: "Animation",
+    duration: "1h 35m",
+    rating: "4.7",
+    image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCGr8EXFBD_o391lFDenx_6yONfIuknjjEX7887uNiJCN4d91s45tkedDnWHycBjot6J1BvzxmQt3cedh9AdCYRq0n61thWT04wrW75_9cBcX3azf7QFdNGAuCpCOmcoSQuL0H1pguuNVlglqK-kQcaeaNn0DbyiCpL28y0J5oU-Rp934UcN9Hojpoe8NuJxTL7kWyUS5cQo201MBnqGXsdDv3coLRLgVYjFn4sAjxIn84nKYgHZJvD9a8IpRxZ9LLo18thg-tBToM"
+  }
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className="flex flex-col min-h-screen">
+      <NavBar />
+      
+      <main className="flex-1 w-full max-w-screen-2xl mx-auto px-8 py-12">
+        <Hero />
+        
+        <CategoryChips />
+        
+        <section className="mb-24">
+          <h2 className="text-3xl font-headline font-extrabold mb-8 flex items-center gap-4">
+            <span className="w-12 h-1 bg-primary rounded-full"></span>
+            Trending Now
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {movies.map((movie) => (
+              <MovieCard key={movie.title} {...movie} />
+            ))}
+          </div>
+        </section>
+
+        <ExperiencePromo />
       </main>
+
+      <Footer />
     </div>
   );
 }
+
