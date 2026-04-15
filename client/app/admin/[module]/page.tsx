@@ -36,7 +36,7 @@ type PosterVariant = "vertical" | "horizontal";
 
 const seatTypeLabelMap: Record<ScreenSeatType, string> = {
   REGULAR: "Regular",
-  COUPLE: "Couple",
+  PREMIUM: "Premium",
   RECLINER: "Recliner",
 };
 
@@ -618,7 +618,7 @@ export default function AdminModulePage() {
       resolvedPrices[seatType] = numericValue;
     }
 
-    const basePrice = resolvedPrices.REGULAR || resolvedPrices.COUPLE || resolvedPrices.RECLINER;
+    const basePrice = resolvedPrices.REGULAR || resolvedPrices.PREMIUM || resolvedPrices.RECLINER;
     if (!basePrice) {
       throw new ApiError(`Row ${rowIndex + 1}: at least one valid seat price is required.`);
     }
@@ -626,7 +626,7 @@ export default function AdminModulePage() {
     return {
       basePrice,
       pricingProfile: {
-        ...(resolvedPrices.COUPLE ? { couplePrice: resolvedPrices.COUPLE } : {}),
+        ...(resolvedPrices.PREMIUM ? { premiumPrice: resolvedPrices.PREMIUM } : {}),
         ...(resolvedPrices.RECLINER ? { reclinerPrice: resolvedPrices.RECLINER } : {}),
       },
     };
@@ -882,24 +882,24 @@ export default function AdminModulePage() {
 
       if (moduleKey === "screens") {
         const regularR = Number(payload.regularRows) || 0;
-        const coupleR = Number(payload.coupleRows) || 0;
+        const premiumR = Number(payload.premiumRows) || 0;
         const reclinerR = Number(payload.reclinerRows) || 0;
-        const rows = regularR + coupleR + reclinerR;
+        const rows = regularR + premiumR + reclinerR;
         const cols = Number(payload.totalCols) || 0;
         
         payload.totalRows = rows;
         const reclinerCapacity = reclinerR * Math.floor(cols / 2);
-        const normalCapacity = (regularR + coupleR) * cols;
+        const normalCapacity = (regularR + premiumR) * cols;
         payload.seatCapacity = normalCapacity + reclinerCapacity;
         
         payload.layoutProfile = {
           regularRows: regularR,
-          coupleRows: coupleR,
+          premiumRows: premiumR,
           reclinerRows: reclinerR,
         };
 
         delete payload.regularRows;
-        delete payload.coupleRows;
+        delete payload.premiumRows;
         delete payload.reclinerRows;
       }
 
@@ -952,7 +952,7 @@ export default function AdminModulePage() {
     if (moduleKey === "screens" && item.layoutProfile) {
       const layout = item.layoutProfile as Record<string, any>;
       stateToSet.regularRows = String(layout.regularRows || 0);
-      stateToSet.coupleRows = String(layout.coupleRows || 0);
+      stateToSet.premiumRows = String(layout.premiumRows || 0);
       stateToSet.reclinerRows = String(layout.reclinerRows || 0);
     }
     
@@ -969,7 +969,7 @@ export default function AdminModulePage() {
       const pricing = (item.pricingProfile || {}) as Record<string, unknown>;
       const prefilledPrices: SeatTypePriceMap = {
         REGULAR: String(item.basePrice || ""),
-        COUPLE: String(pricing.couplePrice || ""),
+        PREMIUM: String(pricing.premiumPrice || ""),
         RECLINER: String(pricing.reclinerPrice || ""),
       };
       const screenId = String(item.screenId || "");
@@ -1628,10 +1628,10 @@ export default function AdminModulePage() {
           {isScreensModule ? (
             (() => {
               const reg = Number(formState.regularRows) || 0;
-              const cpl = Number(formState.coupleRows) || 0;
+              const premium = Number(formState.premiumRows) || 0;
               const rec = Number(formState.reclinerRows) || 0;
               const cols = Number(formState.totalCols) || 0;
-              const cap = (reg + cpl) * cols + rec * Math.floor(cols / 2);
+              const cap = (reg + premium) * cols + rec * Math.floor(cols / 2);
 
               return (
                 <div className="md:col-span-2 mt-4 space-y-4 border-t border-surface-container-high/60 pt-4">
@@ -1653,12 +1653,12 @@ export default function AdminModulePage() {
                   
                   <SeatLayoutPreview 
                     regularRows={reg} 
-                    coupleRows={cpl} 
+                    premiumRows={premium} 
                     reclinerRows={rec} 
                     totalCols={cols} 
                     seatTypePrices={{
                       REGULAR: formState.basePrice,
-                      COUPLE: formState.couplePrice,
+                      PREMIUM: formState.premiumPrice,
                       RECLINER: formState.reclinerPrice,
                     }}
                   />

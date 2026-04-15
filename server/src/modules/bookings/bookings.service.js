@@ -9,8 +9,9 @@ function resolveSeatPrice(basePrice, pricingProfile, seatType) {
     return basePrice;
   }
 
-  if (seatType === "COUPLE" && Number(pricingProfile.couplePrice) > 0) {
-    return Number(pricingProfile.couplePrice);
+  if (seatType === "PREMIUM") {
+    const premiumPrice = Number(pricingProfile.premiumPrice);
+    if (premiumPrice > 0) return premiumPrice;
   }
 
   if (seatType === "RECLINER" && Number(pricingProfile.reclinerPrice) > 0) {

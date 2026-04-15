@@ -15,12 +15,12 @@ function getRowLabel(index) {
 
 function buildSeatRows(totalRows, totalCols, layoutProfile) {
   const regularRows = Number(layoutProfile?.regularRows || 0);
-  const coupleRows = Number(layoutProfile?.coupleRows || 0);
+  const premiumRows = Number(layoutProfile?.premiumRows || 0);
   const reclinerRows = Number(layoutProfile?.reclinerRows || 0);
-  const configuredRows = regularRows + coupleRows + reclinerRows;
+  const configuredRows = regularRows + premiumRows + reclinerRows;
 
   const safeRegularRows = configuredRows > 0 ? regularRows : totalRows;
-  const safeCoupleRows = configuredRows > 0 ? coupleRows : 0;
+  const safePremiumRows = configuredRows > 0 ? premiumRows : 0;
 
   const rows = [];
 
@@ -28,10 +28,10 @@ function buildSeatRows(totalRows, totalCols, layoutProfile) {
     const rowLabel = getRowLabel(rowIndex);
     let seatType = "REGULAR";
 
-    if (rowIndex >= safeRegularRows + safeCoupleRows) {
+    if (rowIndex >= safeRegularRows + safePremiumRows) {
       seatType = "RECLINER";
     } else if (rowIndex >= safeRegularRows) {
-      seatType = "COUPLE";
+      seatType = "PREMIUM";
     }
 
     const seatsInRow = seatType === "RECLINER" ? Math.max(1, Math.floor(totalCols / 2)) : totalCols;
@@ -196,7 +196,7 @@ export async function getScreenSeatTypes(screenId) {
     {},
   );
 
-  const preferredOrder = ["REGULAR", "COUPLE", "RECLINER"];
+  const preferredOrder = ["REGULAR", "PREMIUM", "RECLINER"];
   const seatTypes = preferredOrder.filter((seatType) => Number(seatTypeCounts[seatType]) > 0);
 
   return {

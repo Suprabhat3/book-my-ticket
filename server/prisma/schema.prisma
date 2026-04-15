@@ -20,7 +20,7 @@ enum ScreenType {
 enum SeatType {
   REGULAR
   RECLINER
-  COUPLE
+  PREMIUM
 }
 
 enum ShowStatus {

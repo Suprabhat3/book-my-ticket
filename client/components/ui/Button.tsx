@@ -7,7 +7,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = ({ variant = "primary", className, children, ...props }: ButtonProps) => {
-  const baseStyles = "px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition-all duration-300 active:scale-95 hover:scale-105";
+  const baseStyles = "px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition-all duration-300 active:scale-95 hover:scale-105 cursor-pointer";
   const variants = {
     primary: "clay-button-primary text-on-primary",
     secondary: "clay-button-secondary text-on-secondary-container",

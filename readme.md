@@ -13,8 +13,9 @@ Build a simplified movie ticket booking platform where:
 - Only logged-in users can book seats
 - Duplicate seat booking is prevented (including concurrency-safe checks)
 - Bookings are associated with the authenticated user
-- Movie/show data can stay mocked or admin-managed
+- Movie/show data can be admin-managed
 - Payments is also implemented with razorpay
+- User also can delete their booking, before 24 hours of show start time
 
 ## Monorepo Structure
 

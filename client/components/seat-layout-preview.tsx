@@ -5,7 +5,7 @@ import React from "react";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type SeatBookingStatus = "AVAILABLE" | "LOCKED" | "BOOKED";
-type SeatType = "REGULAR" | "COUPLE" | "RECLINER";
+type SeatType = "REGULAR" | "PREMIUM" | "RECLINER";
 
 export interface SeatItem {
   id: number;
@@ -90,7 +90,7 @@ const PALETTE: Record<SeatType, Palette> = {
     bookedText: "#94a3b8",
     legendDot:  "bg-blue-400",
   },
-  COUPLE: {
+  PREMIUM: {
     label: "Premium",
     availBg:    "linear-gradient(145deg, #fff1f2 0%, #fecdd3 100%)",
     availText:  "#881337",
@@ -260,7 +260,7 @@ function PriceLegend({ seats }: { seats: SeatItem[] }) {
 
   return (
     <div className="flex flex-wrap gap-2 justify-center">
-      {(["REGULAR", "COUPLE", "RECLINER"] as SeatType[])
+      {(["REGULAR", "PREMIUM", "RECLINER"] as SeatType[])
         .filter((t) => seen.has(t))
         .map((t) =>
           pill(t, PALETTE[t].legendDot, PALETTE[t].label,
@@ -292,7 +292,7 @@ function LiveSeatLayout({
 
   const typeRowBuckets: Record<SeatType, Array<[string, SeatItem[]]>> = {
     REGULAR: [],
-    COUPLE: [],
+    PREMIUM: [],
     RECLINER: [],
   };
 
@@ -303,14 +303,14 @@ function LiveSeatLayout({
   }
 
   const inferredPriceByType: SeatTypePriceMap = {};
-  for (const t of ["REGULAR", "COUPLE", "RECLINER"] as SeatType[]) {
+  for (const t of ["REGULAR", "PREMIUM", "RECLINER"] as SeatType[]) {
     const sampleSeat = seats.find((seat) => seat.screenSeat.seatType === t);
     if (sampleSeat) inferredPriceByType[t] = sampleSeat.price;
   }
 
   return (
     <div className="flex flex-col" style={{ gap: 20 }}>
-      {(["REGULAR", "COUPLE", "RECLINER"] as SeatType[]).map((type) => {
+      {(["REGULAR", "PREMIUM", "RECLINER"] as SeatType[]).map((type) => {
         const rows = typeRowBuckets[type];
         if (rows.length === 0) return null;
 
@@ -375,27 +375,27 @@ function LiveSeatLayout({
 // ── Static Preview (admin config mode) ───────────────────────────────────────
 
 function StaticPreview({
-  regularRows, coupleRows, reclinerRows, totalCols,
+  regularRows, premiumRows, reclinerRows, totalCols,
   maxRenderRows = 50, maxRenderCols = 50,
   seatTypePrices,
 }: {
-  regularRows: number; coupleRows: number; reclinerRows: number; totalCols: number;
+  regularRows: number; premiumRows: number; reclinerRows: number; totalCols: number;
   maxRenderRows?: number; maxRenderCols?: number;
   seatTypePrices?: SeatTypePriceMap;
 }) {
   const reg  = Math.max(0, regularRows);
-  const cpl  = Math.max(0, coupleRows);
+  const premium  = Math.max(0, premiumRows);
   const rec  = Math.max(0, reclinerRows);
   const cols = Math.max(0, totalCols);
-  const cap  = (reg + cpl) * cols + rec * Math.floor(cols / 2);
+  const cap  = (reg + premium) * cols + rec * Math.floor(cols / 2);
 
   const regularSections = buildRegularSections(cols, maxRenderCols);
   const visReg    = Math.min(reg, maxRenderRows);
-  const visCpl    = Math.min(cpl, maxRenderRows);
+  const visPremium = Math.min(premium, maxRenderRows);
   const visRec    = Math.min(rec, Math.floor(maxRenderRows / 2));
-  const isCapped  = reg > visReg || cpl > visCpl || rec > visRec || cols > maxRenderCols;
+  const isCapped  = reg > visReg || premium > visPremium || rec > visRec || cols > maxRenderCols;
 
-  if ((reg + cpl + rec) === 0 || cols === 0)
+  if ((reg + premium + rec) === 0 || cols === 0)
     return (
       <div className="flex flex-col items-center text-on-surface-variant my-10 gap-1">
         <span className="font-semibold">Enter screen dimensions</span>
@@ -451,10 +451,10 @@ function StaticPreview({
         </div>
       )}
 
-      {visCpl > 0 && (
+      {visPremium > 0 && (
         <div className="w-full flex flex-col" style={{ gap: 8 }}>
-          <SeatTypeBand type="COUPLE" price={seatTypePrices?.COUPLE} />
-          {Array.from({ length: visCpl }).map((_, r) => <Row key={`c-${r}`} type="COUPLE" count={cols} />)}
+          <SeatTypeBand type="PREMIUM" price={seatTypePrices?.PREMIUM} />
+          {Array.from({ length: visPremium }).map((_, r) => <Row key={`c-${r}`} type="PREMIUM" count={cols} />)}
         </div>
       )}
 
@@ -557,7 +557,7 @@ function CinemaScreen() {
 
 export interface SeatLayoutPreviewProps {
   regularRows?: number;
-  coupleRows?: number;
+  premiumRows?: number;
   reclinerRows?: number;
   totalCols?: number;
   maxRenderRows?: number;
@@ -569,7 +569,7 @@ export interface SeatLayoutPreviewProps {
 }
 
 export function SeatLayoutPreview({
-  regularRows = 0, coupleRows = 0, reclinerRows = 0, totalCols = 0,
+  regularRows = 0, premiumRows = 0, reclinerRows = 0, totalCols = 0,
   maxRenderRows = 50, maxRenderCols = 50,
   seats, selectedIds = [], onToggle, seatTypePrices,
 }: SeatLayoutPreviewProps) {
@@ -593,7 +593,7 @@ export function SeatLayoutPreview({
           ) : (
             <StaticPreview
               regularRows={regularRows}
-              coupleRows={coupleRows}
+              premiumRows={premiumRows}
               reclinerRows={reclinerRows}
               totalCols={totalCols}
               maxRenderRows={maxRenderRows}

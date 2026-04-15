@@ -8,7 +8,7 @@ type ApiResponse<T> = {
 };
 
 type ShowStatus = "SCHEDULED" | "CANCELLED" | "COMPLETED";
-type SeatType = "REGULAR" | "COUPLE" | "RECLINER";
+type SeatType = "REGULAR" | "PREMIUM" | "RECLINER";
 type SeatBookingStatus = "AVAILABLE" | "LOCKED" | "BOOKED";
 type BookingStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED";
 type PaymentStatus = "CREATED" | "AUTHORIZED" | "CAPTURED" | "FAILED";

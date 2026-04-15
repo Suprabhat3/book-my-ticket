@@ -55,7 +55,7 @@ This keeps the database structured but flexible.
 - `seat_number` (1, 2, 3...)
 - `seat_label` (A1, A2...)
 - `zone` (e.g. `PLATINUM`, `GOLD`, `SILVER`)
-- `seat_type` (e.g. `REGULAR`, `RECLINER`, `COUPLE`)
+- `seat_type` (e.g. `REGULAR`, `RECLINER`, `PREMIUM`)
 - `is_active`
 - unique (`screen_id`, `seat_label`)
 

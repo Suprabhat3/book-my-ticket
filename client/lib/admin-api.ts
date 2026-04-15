@@ -20,7 +20,7 @@ type ImageKitUploadAuth = {
   urlEndpoint: string;
 };
 
-export type ScreenSeatType = "REGULAR" | "COUPLE" | "RECLINER";
+export type ScreenSeatType = "REGULAR" | "PREMIUM" | "RECLINER";
 
 export type ScreenSeatTypeSummary = {
   screenId: number;
