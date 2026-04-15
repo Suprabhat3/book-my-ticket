@@ -4,11 +4,15 @@ import { notFound } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { NavBar } from "@/components/NavBar";
 import { Button } from "@/components/ui/Button";
-import { fetchPublicMovieDetails, fetchPublicShows } from "@/lib/user-api";
+import { fetchPublicMovieDetails, fetchPublicShows, fetchPublicTheaters } from "@/lib/user-api";
 
 type PageProps = {
   params: Promise<{
     id: string;
+  }>;
+  searchParams?: Promise<{
+    cityId?: string;
+    theaterId?: string;
   }>;
 };
 
@@ -33,19 +37,69 @@ function formatDuration(durationMinutes: number) {
   return `${h}h ${m}m`;
 }
 
-export default async function MovieDetailsPage({ params }: PageProps) {
+export default async function MovieDetailsPage({ params, searchParams }: PageProps) {
   const resolvedParams = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const movieId = Number(resolvedParams.id);
+  const selectedCityId = Number(resolvedSearchParams?.cityId || "");
+  const selectedTheaterId = Number(resolvedSearchParams?.theaterId || "");
+
+  const selectedCityFilter = Number.isFinite(selectedCityId) && selectedCityId > 0 ? selectedCityId : undefined;
+  const selectedTheaterFilter =
+    Number.isFinite(selectedTheaterId) && selectedTheaterId > 0 ? selectedTheaterId : undefined;
 
   if (!Number.isFinite(movieId) || movieId <= 0) {
     notFound();
   }
 
   try {
-    const [movie, shows] = await Promise.all([
+    const [movie, shows, theaters] = await Promise.all([
       fetchPublicMovieDetails(movieId),
       fetchPublicShows({ movieId }),
+      fetchPublicTheaters(),
     ]);
+
+    const availableTheaterIds = new Set(shows.map((show) => show.theater.id));
+    const availableTheaters = theaters
+      .filter((theater) => availableTheaterIds.has(theater.id))
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    const availableCitiesMap = new Map<number, { id: number; name: string; state: string | null }>();
+    for (const theater of availableTheaters) {
+      availableCitiesMap.set(theater.city.id, {
+        id: theater.city.id,
+        name: theater.city.name,
+        state: theater.city.state,
+      });
+    }
+
+    const availableCities = Array.from(availableCitiesMap.values()).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+
+    const availableCityIds = new Set(availableCities.map((city) => city.id));
+    const normalizedSelectedCityId =
+      selectedCityFilter && availableCityIds.has(selectedCityFilter) ? selectedCityFilter : undefined;
+
+    const theatersByCity = normalizedSelectedCityId
+      ? availableTheaters.filter((theater) => theater.cityId === normalizedSelectedCityId)
+      : availableTheaters;
+
+    const availableTheaterIdsByCity = new Set(theatersByCity.map((theater) => theater.id));
+    const normalizedSelectedTheaterId =
+      selectedTheaterFilter && availableTheaterIdsByCity.has(selectedTheaterFilter)
+        ? selectedTheaterFilter
+        : undefined;
+
+    const filteredShows = shows.filter((show) => {
+      if (normalizedSelectedCityId && show.theater.cityId !== normalizedSelectedCityId) {
+        return false;
+      }
+      if (normalizedSelectedTheaterId && show.theater.id !== normalizedSelectedTheaterId) {
+        return false;
+      }
+      return true;
+    });
 
     return (
       <div className="min-h-screen flex flex-col">
@@ -91,9 +145,56 @@ export default async function MovieDetailsPage({ params }: PageProps) {
           <section id="showtimes" className="space-y-5">
             <h2 className="text-3xl font-headline font-extrabold">Select Showtime</h2>
 
-            {shows.length ? (
+            <div className="clay-card rounded-xl p-5 md:p-6 bg-surface-container-lowest">
+              <form method="get" className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] md:items-end">
+                <label className="flex flex-col gap-2 w-full">
+                  <span className="text-sm font-semibold text-on-surface">Filter by city</span>
+                  <select
+                    name="cityId"
+                    defaultValue={normalizedSelectedCityId ? String(normalizedSelectedCityId) : ""}
+                    className="rounded-xl px-4 py-3 bg-surface-container-low border border-surface-container-high outline-none"
+                  >
+                    <option value="">All Cities</option>
+                    {availableCities.map((city) => (
+                      <option key={city.id} value={city.id}>
+                        {city.state ? `${city.name}, ${city.state}` : city.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-2 w-full">
+                  <span className="text-sm font-semibold text-on-surface">Filter by theater</span>
+                  <select
+                    name="theaterId"
+                    defaultValue={normalizedSelectedTheaterId ? String(normalizedSelectedTheaterId) : ""}
+                    className="rounded-xl px-4 py-3 bg-surface-container-low border border-surface-container-high outline-none"
+                  >
+                    <option value="">All Theaters</option>
+                    {theatersByCity.map((theater) => (
+                      <option key={theater.id} value={theater.id}>
+                        {theater.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <Button type="submit" className="justify-center">
+                  Apply Filter
+                </Button>
+
+                <Link
+                  href={`/movies/${movie.id}#showtimes`}
+                  className="inline-flex items-center justify-center px-8 py-4 rounded-xl font-bold transition-all duration-300 active:scale-95 hover:scale-105 clay-button-secondary text-on-secondary-container"
+                >
+                  Clear
+                </Link>
+              </form>
+            </div>
+
+            {filteredShows.length ? (
               <div className="grid gap-4">
-                {shows.map((show) => (
+                {filteredShows.map((show) => (
                   <div
                     key={show.id}
                     className="clay-card bg-surface-container-lowest rounded-xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
@@ -125,7 +226,7 @@ export default async function MovieDetailsPage({ params }: PageProps) {
               </div>
             ) : (
               <div className="clay-card rounded-xl p-8 text-center text-on-surface-variant">
-                No upcoming showtimes found for this movie yet.
+                No showtimes found for the selected city and theater filters.
               </div>
             )}
           </section>

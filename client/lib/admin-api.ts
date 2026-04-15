@@ -160,6 +160,30 @@ export async function updateModuleItem(
   return payload.data;
 }
 
+export async function deleteModuleItem(
+  moduleKey: AdminModuleKey,
+  itemId: string | number,
+  accessToken: string | null,
+) {
+  const moduleConfig = getAdminModuleByKey(moduleKey);
+  if (!moduleConfig) {
+    throw new ApiError("Unknown admin module");
+  }
+
+  if (!moduleConfig.deleteEnabled) {
+    throw new ApiError("Delete action is not enabled for this module");
+  }
+
+  const response = await requestWithAutoRefresh(`${API_BASE_URL}${moduleConfig.path}/${itemId}`, {
+    method: "DELETE",
+    headers: buildHeaders(accessToken),
+    credentials: "include",
+  });
+
+  const payload = await parseBackendResponse<unknown>(response);
+  return payload.data;
+}
+
 export async function fetchMovieUploadAuth(accessToken: string | null) {
   const response = await requestWithAutoRefresh(`${API_BASE_URL}/movies/upload-auth`, {
     method: "GET",

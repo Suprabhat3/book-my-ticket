@@ -24,6 +24,26 @@ type MovieSummary = {
   posterHorizontalUrl: string | null;
 };
 
+type CitySummary = {
+  id: number;
+  name: string;
+  state: string | null;
+  country: string;
+};
+
+type TheaterSummary = {
+  id: number;
+  name: string;
+  cityId: number;
+  addressLine: string;
+  pincode: string | null;
+  city: {
+    id: number;
+    name: string;
+    state: string | null;
+  };
+};
+
 type ShowSummary = {
   id: number;
   startTime: string;
@@ -238,6 +258,33 @@ export async function fetchPublicShows(params: {
   return parsed.data || [];
 }
 
+export async function fetchPublicCities(search = ""): Promise<CitySummary[]> {
+  const query = search ? `?search=${encodeURIComponent(search)}` : "";
+  const response = await fetch(`${API_BASE_URL}/cities/public${query}`, {
+    cache: "no-store",
+  });
+
+  const parsed = await parseResponse<CitySummary[]>(response);
+  return parsed.data || [];
+}
+
+export async function fetchPublicTheaters(params?: {
+  cityId?: number;
+  search?: string;
+}): Promise<TheaterSummary[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.cityId) searchParams.set("cityId", String(params.cityId));
+  if (params?.search?.trim()) searchParams.set("search", params.search.trim());
+
+  const query = searchParams.toString() ? `?${searchParams.toString()}` : "";
+  const response = await fetch(`${API_BASE_URL}/theaters/public${query}`, {
+    cache: "no-store",
+  });
+
+  const parsed = await parseResponse<TheaterSummary[]>(response);
+  return parsed.data || [];
+}
+
 export async function fetchPublicShowSeatMap(showId: number, accessToken?: string | null): Promise<PublicShowSeatMap> {
   const response = await fetch(`${API_BASE_URL}/shows/public/${showId}/seats`, {
     headers: {
@@ -433,9 +480,11 @@ export async function fetchBookingDetails(accessToken: string, bookingId: string
 
 export type {
   BookingDetails,
+  CitySummary,
   MovieSummary,
   PublicShowSeatMap,
   SeatBookingStatus,
   ShowSeatRecord,
   ShowSummary,
+  TheaterSummary,
 };

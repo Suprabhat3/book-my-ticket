@@ -72,7 +72,7 @@ export const NavBar = () => {
             Movies
           </Link>
           <Link
-            href="/"
+            href="/theaters"
             className="text-on-surface-variant font-medium font-headline tracking-tight hover:scale-105 hover:text-primary transition-all duration-300"
           >
             Cinemas
@@ -119,7 +119,7 @@ export const NavBar = () => {
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-3 w-64 p-4 rounded-3xl bg-surface-container-highest clay-flat z-[100] border border-white/10 backdrop-blur-2xl animate-in fade-in slide-in-from-top-4 duration-300 shadow-2xl">
+                  <div className="absolute right-0 mt-3 w-64 p-4 rounded-3xl bg-surface-container-highest clay-flat z-100 border border-white/10 backdrop-blur-2xl animate-in fade-in slide-in-from-top-4 duration-300 shadow-2xl">
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-3 px-3 py-3 mb-1 rounded-2xl bg-surface-container-low clay-inset">
                         <span className="material-symbols-outlined text-primary">person</span>

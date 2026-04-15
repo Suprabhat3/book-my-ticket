@@ -1,5 +1,6 @@
 import React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Button } from "./ui/Button";
 
 export const ExperiencePromo = () => {
@@ -34,9 +35,11 @@ export const ExperiencePromo = () => {
           </div>
         </div>
         
-        <Button variant="secondary" className="px-10">
-          Explore our Venues
-        </Button>
+        <Link href="/theaters">
+          <Button variant="secondary" className="px-10">
+            Explore our Venues
+          </Button>
+        </Link>
       </div>
 
       <div className="order-1 lg:order-2 grid grid-cols-2 gap-4">

@@ -2,7 +2,7 @@ import React from "react";
 
 export const Footer = () => {
   return (
-    <footer className="w-full rounded-t-[3rem] mt-20 bg-surface-container shadow-[inset_0_8px_16px_rgba(0,0,0,0.03)] clay-card">
+    <footer className="w-full rounded-t-xl mt-20 bg-surface-container shadow-[inset_0_8px_16px_rgba(0,0,0,0.03)] clay-card">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:flex lg:justify-between items-center px-12 py-16 w-full max-w-screen-2xl mx-auto">
         <div className="mb-8 lg:mb-0">
           <div className="text-lg font-bold text-on-surface mb-2 font-headline">

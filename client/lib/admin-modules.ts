@@ -22,6 +22,8 @@ export type AdminModuleConfig = {
   description: string;
   path: string;
   createEnabled: boolean;
+  deleteEnabled: boolean;
+  visible?: boolean;
   fields: ModuleField[];
 };
 
@@ -32,6 +34,8 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
     description: "Add cities where your platform is available.",
     path: "/cities",
     createEnabled: true,
+    deleteEnabled: true,
+    visible: true,
     fields: [
       { key: "name", label: "City Name", type: "text", placeholder: "Mumbai" },
       { key: "state", label: "State", type: "text", placeholder: "Maharashtra" },
@@ -44,6 +48,8 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
     description: "Create cinema theaters in a selected city.",
     path: "/theaters",
     createEnabled: true,
+    deleteEnabled: true,
+    visible: true,
     fields: [
       { key: "cityId", label: "City ID", type: "number", placeholder: "1" },
       { key: "name", label: "Theater Name", type: "text", placeholder: "PVR Nexus" },
@@ -57,6 +63,8 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
     description: "Add screens/audi and define size/type for each theater.",
     path: "/screens",
     createEnabled: true,
+    deleteEnabled: true,
+    visible: true,
     fields: [
       { key: "theaterId", label: "Theater ID", type: "number", placeholder: "1" },
       { key: "name", label: "Screen Name", type: "text", placeholder: "Audi 1" },
@@ -82,6 +90,8 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
     description: "Create and publish movie metadata for booking.",
     path: "/movies",
     createEnabled: true,
+    deleteEnabled: true,
+    visible: true,
     fields: [
       { key: "title", label: "Title", type: "text", placeholder: "Dhurandhar: The Revenge" },
       { key: "description", label: "Description", type: "text", placeholder: "Movie description" },
@@ -97,6 +107,8 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
     description: "Assign movies to theaters/screens with timeslots.",
     path: "/shows",
     createEnabled: true,
+    deleteEnabled: true,
+    visible: true,
     fields: [
       { key: "movieId", label: "Movie ID", type: "number", placeholder: "1" },
       { key: "theaterId", label: "Theater ID", type: "number", placeholder: "1" },
@@ -109,19 +121,23 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
     ],
   },
   {
+    key: "bookings",
+    label: "Bookings",
+    description: "Track ticket bookings with payment and ticket details.",
+    path: "/bookings",
+    createEnabled: false,
+    deleteEnabled: false,
+    visible: true,
+    fields: [],
+  },
+  {
     key: "users",
     label: "Users",
     description: "View registered users.",
     path: "/users",
     createEnabled: false,
-    fields: [],
-  },
-  {
-    key: "bookings",
-    label: "Bookings",
-    description: "Track ticket bookings.",
-    path: "/bookings",
-    createEnabled: false,
+    deleteEnabled: false,
+    visible: false,
     fields: [],
   },
   {
@@ -130,6 +146,8 @@ export const ADMIN_MODULES: AdminModuleConfig[] = [
     description: "Monitor payment records.",
     path: "/payments",
     createEnabled: false,
+    deleteEnabled: false,
+    visible: false,
     fields: [],
   },
 ];

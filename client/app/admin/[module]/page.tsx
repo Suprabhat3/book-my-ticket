@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import {
   createModuleItem,
+  deleteModuleItem,
   fetchModuleItems,
   fetchScreenSeatTypeSummary,
   ScreenSeatType,
@@ -22,6 +23,7 @@ type CityOption = { id: number; name: string };
 type TheaterOption = { id: number; name: string; cityId: number };
 type ScreenOption = { id: number; name: string; theaterId: number };
 type MovieOption = { id: number; title: string; durationMinutes: number };
+type UserLookup = Record<string, { name: string; email: string }>;
 type SeatTypePriceMap = Partial<Record<ScreenSeatType, string>>;
 type ShowAssignment = {
   theaterId: string;
@@ -133,6 +135,33 @@ function getPrimaryLabel(item: ItemRecord) {
   );
 }
 
+function normalizeText(value: unknown) {
+  if (value === null || value === undefined) return "";
+  return String(value).toLowerCase();
+}
+
+function formatDateTime(value: unknown) {
+  if (typeof value !== "string" || !value) return "N/A";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "N/A";
+  return parsed.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatAmountINR(value: unknown) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "N/A";
+  return `Rs. ${amount.toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export default function AdminModulePage() {
   const params = useParams<{ module: string }>();
   const moduleKey = params.module as AdminModuleKey;
@@ -164,6 +193,9 @@ export default function AdminModulePage() {
   const [showAssignments, setShowAssignments] = useState<ShowAssignment[]>([createEmptyShowAssignment()]);
   const [showForm, setShowForm] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | number | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | number | null>(null);
+  const [listFilters, setListFilters] = useState<Record<string, string>>({});
+  const [userLookup, setUserLookup] = useState<UserLookup>({});
 
   useEffect(() => {
     return () => {
@@ -190,7 +222,7 @@ export default function AdminModulePage() {
 
   useEffect(() => {
     const loadCityOptions = async () => {
-      if (moduleKey !== "theaters" && moduleKey !== "screens") return;
+      if (moduleKey !== "theaters" && moduleKey !== "screens" && moduleKey !== "shows") return;
 
       try {
         const token = getAccessToken();
@@ -325,6 +357,44 @@ export default function AdminModulePage() {
     };
 
     void loadMovieOptions();
+  }, [moduleKey]);
+
+  useEffect(() => {
+    setListFilters({});
+  }, [moduleKey]);
+
+  useEffect(() => {
+    const loadUserLookup = async () => {
+      if (moduleKey !== "bookings") {
+        setUserLookup({});
+        return;
+      }
+
+      try {
+        const token = getAccessToken();
+        const data = await fetchModuleItems("users", token);
+        if (!Array.isArray(data)) {
+          setUserLookup({});
+          return;
+        }
+
+        const lookup: UserLookup = {};
+        for (const userItem of data) {
+          const user = userItem as ItemRecord;
+          if (typeof user.id !== "string") continue;
+          lookup[user.id] = {
+            name: typeof user.name === "string" && user.name.trim() ? user.name : "Unknown User",
+            email: typeof user.email === "string" ? user.email : "",
+          };
+        }
+
+        setUserLookup(lookup);
+      } catch {
+        setUserLookup({});
+      }
+    };
+
+    void loadUserLookup();
   }, [moduleKey]);
 
   const loadItems = async () => {
@@ -841,6 +911,44 @@ export default function AdminModulePage() {
     setShowAssignments([createEmptyShowAssignment()]);
   };
 
+  const handleDeleteRequest = async (item: ItemRecord) => {
+    if (!moduleConfig.deleteEnabled) return;
+
+    const itemId = item.id as string | number | undefined;
+    if (itemId === undefined || itemId === null || itemId === "") {
+      setError("Unable to delete this record because it has no valid id.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${moduleConfig.label.slice(0, -1)} \"${getPrimaryLabel(item)}\"? This action cannot be undone.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setError("");
+      setSuccessMessage("");
+      setDeletingItemId(itemId);
+
+      const token = getAccessToken();
+      await deleteModuleItem(moduleConfig.key, itemId, token);
+      setSuccessMessage(`${moduleConfig.label.slice(0, -1)} deleted successfully.`);
+
+      if (editingItemId === itemId) {
+        handleCancelEdit();
+      }
+
+      await loadItems();
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Failed to delete item.";
+      setError(message);
+    } finally {
+      setDeletingItemId(null);
+    }
+  };
+
   if (!moduleConfig) {
     return (
       <div className="space-y-4">
@@ -864,6 +972,216 @@ export default function AdminModulePage() {
 
   const getScreensByTheater = (theaterId: string) =>
     screenOptions.filter((screen) => String(screen.theaterId) === theaterId);
+
+  const cityNameById = useMemo(
+    () => new Map(cityOptions.map((city) => [city.id, city.name])),
+    [cityOptions],
+  );
+  const theaterById = useMemo(
+    () => new Map(theaterOptions.map((theater) => [theater.id, theater])),
+    [theaterOptions],
+  );
+  const movieById = useMemo(
+    () => new Map(movieOptions.map((movie) => [movie.id, movie])),
+    [movieOptions],
+  );
+  const screenById = useMemo(
+    () => new Map(screenOptions.map((screen) => [screen.id, screen])),
+    [screenOptions],
+  );
+
+  const statusOptions = useMemo(() => {
+    const unique = new Set<string>();
+    for (const item of items) {
+      const record = item as ItemRecord;
+      if (typeof record.status === "string" && record.status) {
+        unique.add(record.status);
+      }
+    }
+    return Array.from(unique).sort();
+  }, [items]);
+
+  const theatersInSelectedCity = useMemo(() => {
+    const selectedCityId = Number(listFilters.cityId || "");
+    if (!Number.isFinite(selectedCityId) || selectedCityId <= 0) {
+      return theaterOptions;
+    }
+    return theaterOptions.filter((theater) => theater.cityId === selectedCityId);
+  }, [listFilters.cityId, theaterOptions]);
+
+  const filteredItems = useMemo(() => {
+    const search = normalizeText(listFilters.search || "").trim();
+
+    return items.filter((item) => {
+      const record = item as ItemRecord;
+
+      if (moduleKey === "shows") {
+        const selectedCityId = Number(listFilters.cityId || "");
+        const selectedTheaterId = Number(listFilters.theaterId || "");
+        const selectedMovieId = Number(listFilters.movieId || "");
+
+        const theaterId = Number(record.theaterId || "");
+        const movieId = Number(record.movieId || "");
+        const screenId = Number(record.screenId || "");
+        const theater = theaterById.get(theaterId);
+        const movie = movieById.get(movieId);
+        const screen = screenById.get(screenId);
+
+        if (Number.isFinite(selectedCityId) && selectedCityId > 0 && theater?.cityId !== selectedCityId) {
+          return false;
+        }
+        if (Number.isFinite(selectedTheaterId) && selectedTheaterId > 0 && theaterId !== selectedTheaterId) {
+          return false;
+        }
+        if (Number.isFinite(selectedMovieId) && selectedMovieId > 0 && movieId !== selectedMovieId) {
+          return false;
+        }
+
+        if (!search) return true;
+
+        const searchable = [
+          movie?.title,
+          theater?.name,
+          screen?.name,
+          record.status,
+          record.id,
+          movieId,
+          theaterId,
+          screenId,
+        ]
+          .map((value) => normalizeText(value))
+          .join(" ");
+
+        return searchable.includes(search);
+      }
+
+      if (moduleKey === "theaters") {
+        const selectedCityId = Number(listFilters.cityId || "");
+        const cityId = Number(record.cityId || "");
+        if (Number.isFinite(selectedCityId) && selectedCityId > 0 && cityId !== selectedCityId) {
+          return false;
+        }
+
+        if (!search) return true;
+        const searchable = [record.name, record.addressLine, cityNameById.get(cityId), record.pincode]
+          .map((value) => normalizeText(value))
+          .join(" ");
+        return searchable.includes(search);
+      }
+
+      if (moduleKey === "screens") {
+        const selectedCityId = Number(listFilters.cityId || "");
+        const selectedTheaterId = Number(listFilters.theaterId || "");
+        const theaterId = Number(record.theaterId || "");
+        const theater = theaterById.get(theaterId);
+
+        if (Number.isFinite(selectedCityId) && selectedCityId > 0 && theater?.cityId !== selectedCityId) {
+          return false;
+        }
+        if (Number.isFinite(selectedTheaterId) && selectedTheaterId > 0 && theaterId !== selectedTheaterId) {
+          return false;
+        }
+
+        if (!search) return true;
+        const searchable = [record.name, record.screenType, theater?.name, record.id]
+          .map((value) => normalizeText(value))
+          .join(" ");
+        return searchable.includes(search);
+      }
+
+      if (moduleKey === "movies") {
+        if (!search) return true;
+        const searchable = [record.title, record.language, record.genre, record.id]
+          .map((value) => normalizeText(value))
+          .join(" ");
+        return searchable.includes(search);
+      }
+
+      if (moduleKey === "cities") {
+        if (!search) return true;
+        const searchable = [record.name, record.state, record.country, record.id]
+          .map((value) => normalizeText(value))
+          .join(" ");
+        return searchable.includes(search);
+      }
+
+      if (moduleKey === "bookings") {
+        const selectedStatus = listFilters.status || "";
+        if (selectedStatus && String(record.status || "") !== selectedStatus) {
+          return false;
+        }
+
+        if (!search) return true;
+
+        const show = (record.show || {}) as ItemRecord;
+        const movie = (show.movie || {}) as ItemRecord;
+        const theater = (show.theater || {}) as ItemRecord;
+        const screen = (show.screen || {}) as ItemRecord;
+        const payment = (record.payment || {}) as ItemRecord;
+        const seats = Array.isArray(record.seats) ? (record.seats as ItemRecord[]) : [];
+
+        const seatLabels = seats
+          .map((seat) => {
+            const showSeat = (seat.showSeat || {}) as ItemRecord;
+            const screenSeat = (showSeat.screenSeat || {}) as ItemRecord;
+            return screenSeat.seatLabel;
+          })
+          .filter((value) => typeof value === "string");
+
+        const userId = typeof record.userId === "string" ? record.userId : "";
+        const user = userLookup[userId];
+
+        const searchable = [
+          user?.name,
+          movie.title,
+          theater.name,
+          screen.name,
+          record.status,
+          payment.status,
+          ...seatLabels,
+        ]
+          .map((value) => normalizeText(value))
+          .join(" ");
+
+        return searchable.includes(search);
+      }
+
+      if (!search) return true;
+      const searchable = Object.values(record)
+        .map((value) => normalizeText(value))
+        .join(" ");
+      return searchable.includes(search);
+    });
+  }, [
+    cityNameById,
+    items,
+    listFilters.cityId,
+    listFilters.movieId,
+    listFilters.search,
+    listFilters.status,
+    listFilters.theaterId,
+    moduleKey,
+    movieById,
+    screenById,
+    theaterById,
+    userLookup,
+  ]);
+
+  const handleFilterChange = (key: string, value: string) => {
+    setListFilters((previous) => {
+      const next = { ...previous, [key]: value };
+
+      if (key === "cityId") {
+        next.theaterId = "";
+      }
+
+      return next;
+    });
+  };
+
+  const clearFilters = () => {
+    setListFilters({});
+  };
 
   return (
     <div className="space-y-8">
@@ -1330,14 +1648,168 @@ export default function AdminModulePage() {
 
       {!showForm ? (
         <section className="space-y-4">
+          <div className="clay-inset rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+            <input
+              type="text"
+              value={listFilters.search || ""}
+              onChange={(event) => handleFilterChange("search", event.target.value)}
+              placeholder="Search records"
+              className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+            />
+
+            {moduleKey === "shows" || moduleKey === "theaters" || moduleKey === "screens" ? (
+              <select
+                value={listFilters.cityId || ""}
+                onChange={(event) => handleFilterChange("cityId", event.target.value)}
+                className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+              >
+                <option value="">All Cities</option>
+                {cityOptions.map((city) => (
+                  <option key={city.id} value={String(city.id)}>
+                    {city.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            {moduleKey === "shows" || moduleKey === "screens" ? (
+              <select
+                value={listFilters.theaterId || ""}
+                onChange={(event) => handleFilterChange("theaterId", event.target.value)}
+                className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+              >
+                <option value="">All Theaters</option>
+                {theatersInSelectedCity.map((theater) => (
+                  <option key={theater.id} value={String(theater.id)}>
+                    {theater.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            {moduleKey === "shows" ? (
+              <select
+                value={listFilters.movieId || ""}
+                onChange={(event) => handleFilterChange("movieId", event.target.value)}
+                className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+              >
+                <option value="">All Movies</option>
+                {movieOptions.map((movie) => (
+                  <option key={movie.id} value={String(movie.id)}>
+                    {movie.title}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            {moduleKey === "bookings" ? (
+              <select
+                value={listFilters.status || ""}
+                onChange={(event) => handleFilterChange("status", event.target.value)}
+                className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
+              >
+                <option value="">All Statuses</option>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="clay-button-secondary px-4 py-2 rounded-xl text-sm font-bold"
+            >
+              Clear Filters
+            </button>
+          </div>
+
           {isLoading ? (
             <p className="text-on-surface-variant">Loading records...</p>
-          ) : items.length === 0 ? (
-            <p className="text-on-surface-variant">No records found yet.</p>
+          ) : filteredItems.length === 0 ? (
+            <p className="text-on-surface-variant">
+              {Object.values(listFilters).some((value) => Boolean(value && value.trim()))
+                ? "No records match the applied filters."
+                : "No records found yet."}
+            </p>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {items.map((item, index) => {
+              {filteredItems.map((item, index) => {
                 const record = (item as ItemRecord) || {};
+
+                if (moduleKey === "bookings") {
+                  const show = (record.show || {}) as ItemRecord;
+                  const movie = (show.movie || {}) as ItemRecord;
+                  const theater = (show.theater || {}) as ItemRecord;
+                  const screen = (show.screen || {}) as ItemRecord;
+                  const payment = (record.payment || {}) as ItemRecord;
+                  const seats = Array.isArray(record.seats) ? (record.seats as ItemRecord[]) : [];
+
+                  const seatLabels = seats
+                    .map((seat) => {
+                      const showSeat = (seat.showSeat || {}) as ItemRecord;
+                      const screenSeat = (showSeat.screenSeat || {}) as ItemRecord;
+                      return typeof screenSeat.seatLabel === "string" ? screenSeat.seatLabel : "";
+                    })
+                    .filter(Boolean)
+                    .join(", ");
+
+                  const userId = typeof record.userId === "string" ? record.userId : "";
+                  const user = userLookup[userId];
+                  const userName = user?.name || "Unknown User";
+
+                  return (
+                    <article
+                      key={index}
+                      className="clay-inset rounded-xl p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-[8px_8px_16px_#c3c3c3,-8px_-8px_16px_#fdfdfd] hover:bg-surface-container-low space-y-4"
+                    >
+                      <div className="flex items-center justify-between gap-3 border-b border-surface-container-high/60 pb-3">
+                        <div>
+                          <h4 className="font-bold text-on-surface text-lg">
+                            {typeof movie.title === "string" ? movie.title : "Movie"}
+                          </h4>
+                          <p className="text-sm text-on-surface-variant">
+                            {typeof theater.name === "string" ? theater.name : "Theater"}
+                            {typeof screen.name === "string" ? ` • ${screen.name}` : ""}
+                          </p>
+                        </div>
+                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-surface-container-low text-on-surface-variant">
+                          {typeof record.status === "string" ? record.status : "PENDING"}
+                        </span>
+                      </div>
+
+                      <dl className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="bg-surface-container-low rounded-lg px-3 py-2">
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Customer</dt>
+                          <dd className="text-sm font-medium text-on-surface mt-1">{userName}</dd>
+                        </div>
+                        <div className="bg-surface-container-low rounded-lg px-3 py-2">
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Show Time</dt>
+                          <dd className="text-sm font-medium text-on-surface mt-1">{formatDateTime(show.startTime)}</dd>
+                        </div>
+                        <div className="bg-surface-container-low rounded-lg px-3 py-2 md:col-span-2">
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Seats</dt>
+                          <dd className="text-sm font-medium text-on-surface mt-1">{seatLabels || "N/A"}</dd>
+                        </div>
+                        <div className="bg-surface-container-low rounded-lg px-3 py-2">
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Payment Status</dt>
+                          <dd className="text-sm font-medium text-on-surface mt-1">
+                            {typeof payment.status === "string" ? payment.status : "N/A"}
+                          </dd>
+                        </div>
+                        <div className="bg-surface-container-low rounded-lg px-3 py-2">
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Amount</dt>
+                          <dd className="text-sm font-medium text-on-surface mt-1">
+                            {formatAmountINR(record.totalAmount ?? payment.amount)}
+                          </dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                }
+
                 const preferredFields = moduleFieldMap[moduleConfig.key];
                 const fields = preferredFields.filter((field) => field in record);
 
@@ -1362,14 +1834,27 @@ export default function AdminModulePage() {
                           </span>
                         ) : null}
                       </div>
-                      {moduleConfig.createEnabled && (
-                        <button
-                          onClick={() => handleEditRequest(record)}
-                          className="text-primary hover:bg-primary/10 px-3 py-1 rounded-lg text-sm font-semibold transition-colors"
-                        >
-                          Edit
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {moduleConfig.createEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditRequest(record)}
+                            className="text-primary hover:bg-primary/10 px-3 py-1 rounded-lg text-sm font-semibold transition-colors"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {moduleConfig.deleteEnabled && (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteRequest(record)}
+                            disabled={deletingItemId === record.id}
+                            className="text-red-600 hover:bg-red-100 px-3 py-1 rounded-lg text-sm font-semibold transition-colors disabled:opacity-60"
+                          >
+                            {deletingItemId === record.id ? "Deleting..." : "Delete"}
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <dl className="grid grid-cols-1 md:grid-cols-2 gap-3">

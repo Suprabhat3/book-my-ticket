@@ -11,6 +11,7 @@ type AdminShellProps = {
 
 export function AdminShell({ children }: AdminShellProps) {
   const pathname = usePathname();
+  const visibleModules = ADMIN_MODULES.filter((moduleConfig) => moduleConfig.visible !== false);
 
   return (
     <div className="min-h-screen bg-surface">
@@ -36,7 +37,7 @@ export function AdminShell({ children }: AdminShellProps) {
                 Overview
               </Link>
 
-              {ADMIN_MODULES.map((moduleConfig) => (
+              {visibleModules.map((moduleConfig) => (
                 <Link
                   key={moduleConfig.key}
                   href={`/admin/${moduleConfig.key}`}

@@ -12,6 +12,10 @@ type ModuleCount = {
 };
 
 export default function AdminDashboardPage() {
+  const visibleModules = useMemo(
+    () => ADMIN_MODULES.filter((moduleConfig) => moduleConfig.visible !== false),
+    [],
+  );
   const [counts, setCounts] = useState<ModuleCount[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,7 +26,7 @@ export default function AdminDashboardPage() {
         const token = getAccessToken();
 
         const results = await Promise.all(
-          ADMIN_MODULES.map(async (moduleConfig) => {
+          visibleModules.map(async (moduleConfig) => {
             try {
               const data = await fetchModuleItems(moduleConfig.key, token);
               const count = Array.isArray(data) ? data.length : 0;
@@ -40,7 +44,7 @@ export default function AdminDashboardPage() {
     };
 
     void loadCounts();
-  }, []);
+  }, [visibleModules]);
 
   const countMap = useMemo(() => {
     return Object.fromEntries(counts.map((item) => [item.key, item.count])) as Record<string, number>;
@@ -56,7 +60,7 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {ADMIN_MODULES.map((moduleConfig) => (
+        {visibleModules.map((moduleConfig) => (
           <article key={moduleConfig.key} className="clay-inset rounded-xl p-5 flex flex-col gap-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[8px_8px_16px_#c3c3c3,-8px_-8px_16px_#fdfdfd]">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-on-surface">{moduleConfig.label}</h3>
