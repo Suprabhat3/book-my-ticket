@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Book My Ticket - Client
 
-## Getting Started
+Frontend for the Book My Ticket hackathon assignment.
+This app consumes the backend APIs for auth, public movie browsing, seat selection, booking, and payment completion.
 
-First, run the development server:
+## Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js 16 (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS v4
+
+## Prerequisites
+
+- Node.js 20+
+- pnpm (recommended)
+- Running backend server (default: `http://localhost:8080`)
+
+## Environment Setup
+
+Create `client/.env.local`:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8080/api/v1
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Install
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cd client
+pnpm install
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Run
 
-## Learn More
+```bash
+pnpm dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+App runs at `http://localhost:3000`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Available Scripts
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `pnpm dev` - start dev server
+- `pnpm build` - create production build
+- `pnpm start` - run production build
+- `pnpm lint` - run ESLint
 
-## Deploy on Vercel
+## App Capabilities
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- User registration and login
+- Auth-aware navigation and guarded admin views
+- Public movie/show discovery
+- Seat map view with seat lock flow
+- Booking creation for logged-in users
+- Payment completion flow integration
+- Booking history and booking details pages
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API Integration
+
+The client talks to backend endpoints under:
+
+- `/api/v1/auth`
+- `/api/v1/movies`
+- `/api/v1/shows`
+- `/api/v1/bookings`
+- `/api/v1/payments`
+
+If backend URL/port changes, update `NEXT_PUBLIC_API_BASE_URL`.
+
+## Notes
+
+- For full-system setup, refer to the root repository README.
+- This frontend is optional per assignment rules, but included for end-to-end demonstration.

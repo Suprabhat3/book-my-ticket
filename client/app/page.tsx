@@ -13,7 +13,9 @@ function formatDuration(durationMinutes: number) {
 
 export default async function Home() {
   const movies = await fetchPublicMovies();
-  const featuredMovie = movies[0];
+  const featuredMovie = movies.length
+    ? movies[Math.floor(Math.random() * movies.length)]
+    : undefined;
 
   return (
     <div className="flex flex-col min-h-screen">

@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Feature-based backend for movie ticket booking platform",
   "type": "module",
-  "main": "src/server.js",
+  "main": "index.mjs",
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
+    "dev": "nodemon index.mjs",
+    "start": "node index.mjs",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

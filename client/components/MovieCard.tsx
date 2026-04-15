@@ -22,7 +22,7 @@ export const MovieCard = ({ id, title, genre, duration, language, rating = "New"
           alt={title}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-          className="object-cover group-hover:scale-110 transition-transform duration-700"
+          className="object-fill group-hover:scale-110 transition-transform duration-700"
         />
       </div>
       <div className="flex justify-between items-start mb-2">
