@@ -1012,6 +1012,7 @@ export default function AdminModulePage() {
   };
 
   const handleDeleteRequest = async (item: ItemRecord) => {
+    if (!moduleConfig) return;
     if (!moduleConfig.deleteEnabled) return;
 
     const itemId = item.id as string | number | undefined;
