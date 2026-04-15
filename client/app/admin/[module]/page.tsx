@@ -22,7 +22,7 @@ type ItemRecord = Record<string, unknown>;
 type CityOption = { id: number; name: string };
 type TheaterOption = { id: number; name: string; cityId: number };
 type ScreenOption = { id: number; name: string; theaterId: number };
-type MovieOption = { id: number; title: string; durationMinutes: number };
+type MovieOption = { id: number; title: string; durationMinutes: number; releaseDate: string };
 type UserLookup = Record<string, { name: string; email: string }>;
 type SeatTypePriceMap = Partial<Record<ScreenSeatType, string>>;
 type ShowAssignment = {
@@ -59,6 +59,59 @@ function calculateShowEndTime(startTimeLocal: string, durationMinutes: number) {
   const end = new Date(start.getTime() + (durationMinutes + 20) * 60 * 1000);
   end.setMinutes(end.getMinutes() - end.getTimezoneOffset());
   return end.toISOString().slice(0, 16);
+}
+
+function toDateTimeLocalInputValue(value: string) {
+  const parsed = parseApiDate(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  parsed.setMinutes(parsed.getMinutes() - parsed.getTimezoneOffset());
+  return parsed.toISOString().slice(0, 16);
+}
+
+function parseApiDate(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) {
+    return new Date(NaN);
+  }
+
+  const direct = new Date(value);
+  if (!Number.isNaN(direct.getTime())) {
+    return direct;
+  }
+
+  const normalized = value.includes(" ") ? value.replace(" ", "T") : value;
+  const normalizedDate = new Date(normalized);
+  if (!Number.isNaN(normalizedDate.getTime())) {
+    return normalizedDate;
+  }
+
+  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    const dateOnly = new Date(`${year}-${month}-${day}T00:00:00`);
+    if (!Number.isNaN(dateOnly.getTime())) {
+      return dateOnly;
+    }
+  }
+
+  return new Date(NaN);
+}
+
+function formatReleaseDateForAdmin(value: unknown) {
+  const parsed = parseApiDate(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Release date not available";
+  }
+
+  return parsed.toLocaleString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function normalizeFormValue(key: string, value: string): unknown {
@@ -342,12 +395,14 @@ export default function AdminModulePage() {
               typeof movie.id === "number" &&
               typeof movie.title === "string" &&
               typeof movie.durationMinutes === "number" &&
+              typeof movie.releaseDate === "string" &&
               (movie.isActive === undefined || movie.isActive === true),
           )
           .map((movie) => ({
             id: movie.id as number,
             title: movie.title as string,
             durationMinutes: movie.durationMinutes as number,
+            releaseDate: movie.releaseDate as string,
           }));
 
         setMovieOptions(mapped);
@@ -445,6 +500,38 @@ export default function AdminModulePage() {
       previous.endTime === calculatedEndTime ? previous : { ...previous, endTime: calculatedEndTime },
     );
   }, [moduleKey, movieOptions, formState.movieId, formState.startTime]);
+
+  useEffect(() => {
+    if (moduleKey !== "shows") return;
+    if (!formState.movieId) return;
+
+    const selectedMovie = movieOptions.find((movie) => String(movie.id) === formState.movieId);
+    if (!selectedMovie) return;
+
+    const releaseDateLocal = toDateTimeLocalInputValue(selectedMovie.releaseDate);
+    if (!releaseDateLocal) return;
+
+    setFormState((previous) => {
+      const currentStart = previous.startTime || "";
+      if (!currentStart) {
+        return {
+          ...previous,
+          startTime: releaseDateLocal,
+        };
+      }
+
+      const currentStartDate = new Date(currentStart);
+      const releaseDate = new Date(releaseDateLocal);
+      if (Number.isNaN(currentStartDate.getTime()) || currentStartDate < releaseDate) {
+        return {
+          ...previous,
+          startTime: releaseDateLocal,
+        };
+      }
+
+      return previous;
+    });
+  }, [moduleKey, movieOptions, formState.movieId]);
 
   const handleInputChange = (key: string, value: string) => {
     setFormState((previous) => ({ ...previous, [key]: value }));
@@ -630,6 +717,19 @@ export default function AdminModulePage() {
 
         if (!movieId || !startTime || !endTime) {
           throw new ApiError("Movie and start time are required.");
+        }
+
+        if (selectedMovie) {
+          const showStart = new Date(startTime);
+          const movieRelease = new Date(selectedMovie.releaseDate);
+
+          if (Number.isNaN(showStart.getTime()) || Number.isNaN(movieRelease.getTime())) {
+            throw new ApiError("Invalid movie release date or show start time.");
+          }
+
+          if (showStart < movieRelease) {
+            throw new ApiError("Show start time cannot be before movie release date.");
+          }
         }
 
         if (showAssignments.length === 0) {
@@ -969,6 +1069,10 @@ export default function AdminModulePage() {
   const isShowsModule = moduleKey === "shows";
   const isMoviesModule = moduleKey === "movies";
   const isAnyPosterUploading = uploadingPosters.vertical || uploadingPosters.horizontal;
+  const selectedShowMovie =
+    isShowsModule && formState.movieId
+      ? movieOptions.find((movie) => String(movie.id) === formState.movieId)
+      : undefined;
 
   const getScreensByTheater = (theaterId: string) =>
     screenOptions.filter((screen) => String(screen.theaterId) === theaterId);
@@ -1248,8 +1352,14 @@ export default function AdminModulePage() {
                   type="datetime-local"
                   value={formState.startTime || ""}
                   onChange={(event) => handleInputChange("startTime", event.target.value)}
+                  min={selectedShowMovie ? toDateTimeLocalInputValue(selectedShowMovie.releaseDate) : undefined}
                   className="rounded-xl px-3 py-2 bg-surface-container-low border border-surface-container-high outline-none"
                 />
+                {selectedShowMovie ? (
+                  <p className="text-xs text-on-surface-variant">
+                    Movie releases on {formatReleaseDateForAdmin(selectedShowMovie.releaseDate)}.
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-col gap-2">

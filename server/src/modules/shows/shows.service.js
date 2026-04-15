@@ -70,6 +70,20 @@ async function ensureShowSeatsExist(tx, show) {
   });
 }
 
+function assertShowAfterMovieRelease(movie, startTime) {
+  if (!(startTime instanceof Date) || Number.isNaN(startTime.getTime())) {
+    throw new AppError("Invalid show start time", 400);
+  }
+
+  if (!(movie?.releaseDate instanceof Date) || Number.isNaN(movie.releaseDate.getTime())) {
+    throw new AppError("Movie release date is invalid", 400);
+  }
+
+  if (startTime < movie.releaseDate) {
+    throw new AppError("Show start time cannot be before movie release date", 400);
+  }
+}
+
 export async function listShows({ movieId, theaterId, screenId, status, publicOnly = false }) {
   const now = new Date();
 
@@ -130,6 +144,8 @@ export async function createShow(payload) {
     throw new AppError("Selected screen does not belong to selected theater", 400);
   }
 
+  assertShowAfterMovieRelease(movie, payload.startTime);
+
   const activeScreenSeats = await prisma.screenSeat.findMany({
     where: {
       screenId: payload.screenId,
@@ -178,9 +194,22 @@ export async function createShow(payload) {
 }
 
 export async function updateShow(id, payload) {
-  const show = await prisma.show.findUnique({ where: { id } });
+  const show = await prisma.show.findUnique({
+    where: { id },
+    include: {
+      movie: {
+        select: {
+          releaseDate: true,
+        },
+      },
+    },
+  });
   if (!show) {
     throw new AppError("Show not found", 404);
+  }
+
+  if (payload.startTime !== undefined) {
+    assertShowAfterMovieRelease(show.movie, payload.startTime);
   }
 
   const shouldRefreshSeatPrices = payload.basePrice !== undefined || payload.pricingProfile !== undefined;
