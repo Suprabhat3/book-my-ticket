@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "next/link";
 
 export const Footer = () => {
   return (
@@ -21,28 +22,28 @@ export const Footer = () => {
             </h4>
             <ul className="flex flex-col gap-2">
               <li>
-                <a
+                <Link
                   className="text-on-surface-variant hover:text-primary transition-all font-body text-sm"
-                  href="#"
+                  href="/about"
                 >
                   About Us
-                </a>
+                </Link>
               </li>
               <li>
-                <a
+                <Link
                   className="text-on-surface-variant hover:text-primary transition-all font-body text-sm"
-                  href="#"
+                  href="/privacy"
                 >
                   Privacy Policy
-                </a>
+                </Link>
               </li>
               <li>
-                <a
+                <Link
                   className="text-on-surface-variant hover:text-primary transition-all font-body text-sm"
-                  href="#"
+                  href="/terms"
                 >
                   Terms
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
