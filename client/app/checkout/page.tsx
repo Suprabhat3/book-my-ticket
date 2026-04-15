@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { NavBar } from "@/components/NavBar";
@@ -39,6 +39,26 @@ function formatDateTime(value: string) {
 }
 
 export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<CheckoutLoading />}>
+      <CheckoutPageContent />
+    </Suspense>
+  );
+}
+
+function CheckoutLoading() {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <NavBar />
+      <main className="flex-1 w-full max-w-4xl mx-auto px-6 md:px-8 py-10">
+        <p className="text-on-surface-variant">Loading checkout...</p>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

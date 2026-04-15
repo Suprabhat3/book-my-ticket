@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -9,6 +9,24 @@ import { ApiError, loginUser } from "@/lib/api";
 import { saveAuthSession } from "@/lib/auth-storage";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageLoading />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageLoading() {
+  return (
+    <div className="min-h-screen bg-surface flex items-center justify-center px-4">
+      <div className="clay-card bg-surface-container-lowest p-10 rounded-xl w-full max-w-md">
+        <p className="text-on-surface-variant text-center">Loading sign in...</p>
+      </div>
+    </div>
+  );
+}
+
+function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
