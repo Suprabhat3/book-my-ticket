@@ -69,11 +69,21 @@ export default async function TheatersPage({ searchParams }: PageProps) {
   const selectedTheaterFilter =
     Number.isFinite(selectedTheaterId) && selectedTheaterId > 0 ? selectedTheaterId : undefined;
 
-  const [cities, theaters, shows] = await Promise.all([
-    fetchPublicCities(),
-    fetchPublicTheaters(),
-    fetchPublicShows({}),
-  ]);
+  let cities = [] as Awaited<ReturnType<typeof fetchPublicCities>>;
+  let theaters = [] as Awaited<ReturnType<typeof fetchPublicTheaters>>;
+  let shows = [] as Awaited<ReturnType<typeof fetchPublicShows>>;
+
+  try {
+    [cities, theaters, shows] = await Promise.all([
+      fetchPublicCities(),
+      fetchPublicTheaters(),
+      fetchPublicShows({}),
+    ]);
+  } catch {
+    cities = [];
+    theaters = [];
+    shows = [];
+  }
 
   const showsByTheater = getShowsByTheater(shows);
   const theatersWithShows = theaters.filter((theater) => showsByTheater.has(theater.id));

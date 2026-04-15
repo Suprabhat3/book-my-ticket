@@ -12,7 +12,12 @@ function formatDuration(durationMinutes: number) {
 }
 
 export default async function Home() {
-  const movies = await fetchPublicMovies();
+  let movies = [] as Awaited<ReturnType<typeof fetchPublicMovies>>;
+  try {
+    movies = await fetchPublicMovies();
+  } catch {
+    movies = [];
+  }
   const featuredMovie = movies.length
     ? movies[Math.floor(Math.random() * movies.length)]
     : undefined;
