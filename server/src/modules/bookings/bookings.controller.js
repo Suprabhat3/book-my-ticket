@@ -45,3 +45,15 @@ export const getBookingById = asyncHandler(async (req, res) => {
     data: booking,
   });
 });
+
+export const cancelBooking = asyncHandler(async (req, res) => {
+  const booking = await bookingsService.cancelBooking({
+    bookingId: req.validated.params.id,
+    requestUser: req.user,
+  });
+
+  return sendSuccess(res, {
+    message: "Amount refunded successfully and seats released",
+    data: booking,
+  });
+});

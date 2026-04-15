@@ -2,6 +2,7 @@ import { prisma } from "../../db/prisma.js";
 import { AppError } from "../../common/utils/app-error.js";
 
 const SEAT_HOLD_MINUTES = 5;
+const CANCELLATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function resolveSeatPrice(basePrice, pricingProfile, seatType) {
   if (!pricingProfile || typeof pricingProfile !== "object") {
@@ -284,4 +285,80 @@ export async function getBookingById(id, requestUser) {
   }
 
   return booking;
+}
+
+export async function cancelBooking({ bookingId, requestUser }) {
+  return prisma.$transaction(async (tx) => {
+    const booking = await tx.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        show: {
+          select: {
+            id: true,
+            startTime: true,
+            status: true,
+          },
+        },
+        seats: {
+          select: {
+            showSeatId: true,
+          },
+        },
+        payment: {
+          select: {
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new AppError("Booking not found", 404);
+    }
+
+    if (booking.userId !== requestUser.sub) {
+      throw new AppError("Forbidden", 403);
+    }
+
+    if (booking.status === "CANCELLED") {
+      return tx.booking.findUnique({
+        where: { id: bookingId },
+        include: bookingInclude,
+      });
+    }
+
+    if (booking.status !== "PAID" || booking.payment?.status !== "CAPTURED") {
+      throw new AppError("Only paid bookings can be cancelled", 400);
+    }
+
+    const timeUntilShow = booking.show.startTime.getTime() - Date.now();
+    if (timeUntilShow <= CANCELLATION_WINDOW_MS) {
+      throw new AppError("Tickets can only be cancelled more than 24 hours before show time", 400);
+    }
+
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: "CANCELLED",
+      },
+    });
+
+    await tx.showSeat.updateMany({
+      where: {
+        id: {
+          in: booking.seats.map((seat) => seat.showSeatId),
+        },
+      },
+      data: {
+        status: "AVAILABLE",
+        lockedUntil: null,
+        lockedByUserId: null,
+      },
+    });
+
+    return tx.booking.findUnique({
+      where: { id: bookingId },
+      include: bookingInclude,
+    });
+  });
 }

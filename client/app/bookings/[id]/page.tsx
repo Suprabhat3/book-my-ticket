@@ -6,8 +6,9 @@ import { useParams } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { NavBar } from "@/components/NavBar";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getAccessToken } from "@/lib/auth-storage";
-import { BookingDetails, fetchBookingDetails, UserApiError } from "@/lib/user-api";
+import { BookingDetails, cancelBooking, fetchBookingDetails, UserApiError } from "@/lib/user-api";
 
 const TICKET_QR_TARGET_URL = "https://suprabhat.site/";
 
@@ -62,6 +63,14 @@ function buildTicketSvg(booking: BookingDetails, qrHref: string) {
   const showTime = formatDateTime(booking.show.startTime);
   const bookingStatus = booking.status;
   const paymentStatus = booking.payment?.status || "N/A";
+  const amountLabel = booking.status === "CANCELLED" ? "REFUNDED" : "PAID";
+  const cancellationWatermark =
+    booking.status === "CANCELLED"
+      ? `<g opacity="0.2" transform="rotate(-18 600 300)">
+  <rect x="170" y="255" width="860" height="90" rx="16" fill="none" stroke="#EF4444" stroke-width="8"/>
+  <text x="600" y="316" text-anchor="middle" fill="#EF4444" font-size="80" font-family="Arial, Helvetica, sans-serif" font-weight="800" letter-spacing="8">CANCELLED</text>
+</g>`
+      : "";
 
   // Left content area: x=60 to x=840 (width=780), Right QR sidebar: x=876 to x=1140
   // 3 info columns so each has enough room:
@@ -174,7 +183,8 @@ function buildTicketSvg(booking: BookingDetails, qrHref: string) {
   </g>
 
   <!-- Footer right: PAID – anchored to right edge, vertically centred between separator and bottom -->
-  <text x="1140" y="500" text-anchor="end" fill="#FBBF24" font-size="34" font-family="Arial, Helvetica, sans-serif" font-weight="700">PAID: Rs. ${escapeSvg(String(booking.totalAmount))}</text>
+  <text x="1140" y="500" text-anchor="end" fill="#FBBF24" font-size="34" font-family="Arial, Helvetica, sans-serif" font-weight="700">${escapeSvg(amountLabel)}: Rs. ${escapeSvg(String(booking.totalAmount))}</text>
+  ${cancellationWatermark}
 </svg>`;
 }
 
@@ -183,7 +193,10 @@ export default function BookingDetailsPage() {
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
 
   useEffect(() => {
     setAccessToken(getAccessToken());
@@ -219,6 +232,33 @@ export default function BookingDetailsPage() {
 
     void load();
   }, [accessToken, params.id]);
+
+  const isCancellationEligible =
+    booking &&
+    booking.status === "PAID" &&
+    booking.payment?.status === "CAPTURED" &&
+    new Date(booking.show.startTime).getTime() - Date.now() > 24 * 60 * 60 * 1000;
+
+  const handleCancelBooking = async () => {
+    if (!accessToken || !booking || !isCancellationEligible) {
+      return;
+    }
+
+    try {
+      setError("");
+      setSuccessMessage("");
+      setIsCancelling(true);
+      const updated = await cancelBooking(accessToken, booking.id);
+      setBooking(updated);
+      setSuccessMessage("Amount refunded successfully. Seats are released and available for booking.");
+    } catch (cancelError) {
+      const message =
+        cancelError instanceof UserApiError ? cancelError.message : "Unable to cancel booking right now.";
+      setError(message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const handleDownloadTicket = async () => {
     if (!booking) return;
@@ -288,10 +328,17 @@ export default function BookingDetailsPage() {
           <h1 className="text-3xl font-headline font-black">Booking Details</h1>
           <div className="flex items-center gap-3">
             {booking ? (
-              <Button onClick={handleDownloadTicket}>
-                <span className="material-symbols-outlined">download</span>
-                Download Ticket
-              </Button>
+              <>
+                <Button onClick={handleDownloadTicket}>
+                  <span className="material-symbols-outlined">download</span>
+                  Download Ticket
+                </Button>
+                {isCancellationEligible ? (
+                  <Button variant="secondary" onClick={() => setIsCancelDialogOpen(true)} disabled={isCancelling}>
+                    {isCancelling ? "Cancelling..." : "Cancel Booking"}
+                  </Button>
+                ) : null}
+              </>
             ) : null}
             <Link href="/bookings">
               <Button variant="secondary">Back to Bookings</Button>
@@ -301,6 +348,12 @@ export default function BookingDetailsPage() {
 
         {isLoading ? <p className="text-on-surface-variant">Loading booking details...</p> : null}
         {error ? <div className="clay-card rounded-xl p-4 bg-red-100/70 text-red-700">{error}</div> : null}
+        {successMessage ? <div className="clay-card rounded-xl p-4 bg-emerald-100/70 text-emerald-700">{successMessage}</div> : null}
+        {booking?.status === "CANCELLED" ? (
+          <div className="clay-card rounded-xl p-4 bg-emerald-100/70 text-emerald-700">
+            Your ticket is cancelled successfully and the amount is refunded successfully to your source account.
+          </div>
+        ) : null}
         {!accessToken && !isLoading ? (
           <div className="clay-card rounded-xl p-6 space-y-3">
             <p className="text-on-surface-variant">Login to view this booking.</p>
@@ -314,6 +367,13 @@ export default function BookingDetailsPage() {
           <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-slate-100 shadow-2xl">
             <div className="absolute -left-5 top-1/2 w-10 h-10 rounded-full bg-surface -translate-y-1/2" />
             <div className="absolute -right-5 top-1/2 w-10 h-10 rounded-full bg-surface -translate-y-1/2" />
+            {booking.status === "CANCELLED" ? (
+              <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center px-6">
+                <div className="rotate-[-18deg] border-4 border-red-500/70 rounded-2xl px-8 py-3 bg-red-500/10">
+                  <p className="text-5xl md:text-7xl font-black tracking-[0.28em] text-red-400/85">CANCELLED</p>
+                </div>
+              </div>
+            ) : null}
 
             <div className="bg-linear-to-r from-amber-400 to-yellow-300 px-6 md:px-8 py-4 flex items-center justify-between">
               <p className="font-headline text-xl md:text-2xl font-black text-slate-900">Book Suprabhat's Ticket</p>
@@ -384,13 +444,33 @@ export default function BookingDetailsPage() {
                 <p className="text-xs text-slate-400">Booking ID: {booking.id}</p>
                 <div className="flex items-center gap-6">
                   <p className="text-xs text-slate-400">Issued: {formatDateTime(booking.createdAt)}</p>
-                  <p className="text-lg font-black text-amber-300">PAID: Rs. {booking.totalAmount}</p>
+                  <p className="text-lg font-black text-amber-300">
+                    {booking.status === "CANCELLED" ? "REFUNDED" : "PAID"}: Rs. {booking.totalAmount}
+                  </p>
                 </div>
               </div>
             </div>
           </div>
         ) : null}
       </main>
+
+      <ConfirmDialog
+        open={isCancelDialogOpen}
+        title="Cancel this booking?"
+        description={
+          booking
+            ? `${booking.show.movie.title} at ${booking.show.theater.name}. Your amount will be marked refunded and selected seats will be released instantly.`
+            : ""
+        }
+        confirmLabel="Yes, cancel booking"
+        cancelLabel="Keep booking"
+        isLoading={isCancelling}
+        onCancel={() => setIsCancelDialogOpen(false)}
+        onConfirm={() => {
+          setIsCancelDialogOpen(false);
+          void handleCancelBooking();
+        }}
+      />
 
       <Footer />
     </div>

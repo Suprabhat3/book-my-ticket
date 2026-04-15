@@ -11,6 +11,7 @@ type ShowStatus = "SCHEDULED" | "CANCELLED" | "COMPLETED";
 type SeatType = "REGULAR" | "COUPLE" | "RECLINER";
 type SeatBookingStatus = "AVAILABLE" | "LOCKED" | "BOOKED";
 type BookingStatus = "PENDING" | "PAID" | "FAILED" | "CANCELLED";
+type PaymentStatus = "CREATED" | "AUTHORIZED" | "CAPTURED" | "FAILED";
 
 type MovieSummary = {
   id: number;
@@ -174,7 +175,7 @@ type BookingDetails = {
   seats: BookingSeat[];
   payment: {
     id: string;
-    status: "CREATED" | "AUTHORIZED" | "CAPTURED" | "FAILED";
+    status: PaymentStatus;
     amount: string;
     currency: string;
     provider: string;
@@ -473,6 +474,23 @@ export async function fetchBookingDetails(accessToken: string, bookingId: string
   const parsed = await parseResponse<BookingDetails>(response);
   if (!parsed.data) {
     throw new UserApiError("Booking not found");
+  }
+
+  return parsed.data;
+}
+
+export async function cancelBooking(accessToken: string, bookingId: string): Promise<BookingDetails> {
+  const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}/cancel`, {
+    method: "POST",
+    headers: {
+      ...buildAuthHeaders(accessToken),
+    },
+    cache: "no-store",
+  });
+
+  const parsed = await parseResponse<BookingDetails>(response);
+  if (!parsed.data) {
+    throw new UserApiError("Booking could not be cancelled");
   }
 
   return parsed.data;

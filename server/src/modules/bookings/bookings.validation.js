@@ -22,3 +22,11 @@ export const bookingIdParamSchema = z.object({
   }),
   query: z.object({}).optional(),
 });
+
+export const cancelBookingSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({
+    id: z.string().trim().min(1),
+  }),
+  query: z.object({}).optional(),
+});
