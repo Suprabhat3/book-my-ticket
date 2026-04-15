@@ -102,44 +102,79 @@ export default async function MovieDetailsPage({ params, searchParams }: PagePro
     });
 
     return (
-      <div className="min-h-screen flex flex-col">
+      <div className="relative min-h-screen flex flex-col">
+
+        {/* ── Full-page horizontal backdrop ── */}
+        {movie.posterHorizontalUrl && (
+          <div className="absolute inset-x-0 top-0 h-[75vh] z-0 pointer-events-none select-none" aria-hidden="true">
+            <Image
+              src={movie.posterHorizontalUrl}
+              alt=""
+              fill
+              priority
+              className="object-cover object-top"
+              sizes="100vw"
+            />
+            {/* Darken so text stays legible */}
+            <div className="absolute inset-0 bg-surface/55" />
+            {/* Fade to surface at the bottom — bleeds into page content */}
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-surface/60 to-surface" />
+            {/* Subtle side vignettes */}
+            <div className="absolute inset-0 bg-gradient-to-r from-surface/40 via-transparent to-surface/40" />
+          </div>
+        )}
+
         <NavBar />
 
-        <main className="flex-1 w-full max-w-screen-2xl mx-auto px-6 md:px-8 py-10 md:py-12 space-y-10">
-          <section className="grid md:grid-cols-[300px_1fr] gap-8 items-start">
-            <div className="relative aspect-2/3 rounded-xl overflow-hidden clay-card">
-              <Image
-                src={movie.posterVerticalUrl || movie.posterHorizontalUrl || "https://lh3.googleusercontent.com/aida-public/AB6AXuCGr8EXFBD_o391lFDenx_6yONfIuknjjEX7887uNiJCN4d91s45tkedDnWHycBjot6J1BvzxmQt3cedh9AdCYRq0n61thWT04wrW75_9cBcX3azf7QFdNGAuCpCOmcoSQuL0H1pguuNVlglqK-kQcaeaNn0DbyiCpL28y0J5oU-Rp934UcN9Hojpoe8NuJxTL7kWyUS5cQo201MBnqGXsdDv3coLRLgVYjFn4sAjxIn84nKYgHZJvD9a8IpRxZ9LLo18thg-tBToM"}
-                alt={movie.title}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 300px"
-              />
-            </div>
+        <main className="relative z-10 flex-1 w-full max-w-screen-2xl mx-auto px-6 md:px-8 py-10 md:py-12 space-y-10">
+          {/* ── Hero Section — floats over the backdrop ── */}
+          <section className="grid md:grid-cols-[260px_1fr] gap-8 md:gap-12 items-start pt-4">
 
-            <div className="space-y-6">
-              <div>
-                <p className="text-sm font-bold tracking-widest text-primary uppercase">Now Booking</p>
-                <h1 className="text-4xl md:text-5xl font-headline font-black text-on-surface mt-2">{movie.title}</h1>
+              {/* Vertical poster */}
+              <div className="relative aspect-2/3 rounded-2xl overflow-hidden clay-card shrink-0 w-[200px] md:w-full">
+                <Image
+                  src={movie.posterVerticalUrl || movie.posterHorizontalUrl || "https://lh3.googleusercontent.com/aida-public/AB6AXuCGr8EXFBD_o391lFDenx_6yONfIuknjjEX7887uNiJCN4d91s45tkedDnWHycBjot6J1BvzxmQt3cedh9AdCYRq0n61thWT04wrW75_9cBcX3azf7QFdNGAuCpCOmcoSQuL0H1pguuNVlglqK-kQcaeaNn0DbyiCpL28y0J5oU-Rp934UcN9Hojpoe8NuJxTL7kWyUS5cQo201MBnqGXsdDv3coLRLgVYjFn4sAjxIn84nKYgHZJvD9a8IpRxZ9LLo18thg-tBToM"}
+                  alt={movie.title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 200px, 300px"
+                  priority
+                />
               </div>
 
-              <div className="flex flex-wrap gap-3 text-sm">
-                <span className="px-4 py-2 rounded-full bg-surface-container-high">{movie.genre}</span>
-                <span className="px-4 py-2 rounded-full bg-surface-container-high">{movie.language}</span>
-                <span className="px-4 py-2 rounded-full bg-surface-container-high">
-                  {formatDuration(movie.durationMinutes)}
-                </span>
-                <span className="px-4 py-2 rounded-full bg-surface-container-high">
-                  Released {new Date(movie.releaseDate).toLocaleDateString()}
-                </span>
+              {/* Text info */}
+              <div className="space-y-6">
+                <div>
+                  <p className="text-sm font-bold tracking-widest text-primary uppercase">Now Booking</p>
+                  <h1 className="text-4xl md:text-5xl font-headline font-black text-on-surface mt-2 drop-shadow-sm">
+                    {movie.title}
+                  </h1>
+                </div>
+
+                <div className="flex flex-wrap gap-3 text-sm">
+                  {[
+                    movie.genre,
+                    movie.language,
+                    formatDuration(movie.durationMinutes),
+                    `Released ${new Date(movie.releaseDate).toLocaleDateString()}`,
+                  ].map((chip) => (
+                    <span
+                      key={chip}
+                      className="px-4 py-2 rounded-full bg-surface-container/70 backdrop-blur-md font-body font-medium"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+
+                <p className="text-on-surface-variant leading-relaxed max-w-xl font-body">
+                  {movie.description}
+                </p>
+
+                <Link href="#showtimes">
+                  <Button variant="primary">View Showtimes</Button>
+                </Link>
               </div>
-
-              <p className="text-on-surface-variant leading-relaxed max-w-3xl">{movie.description}</p>
-
-              <Link href="#showtimes">
-                <Button variant="primary">View Showtimes</Button>
-              </Link>
-            </div>
           </section>
 
           <section id="showtimes" className="space-y-5">
