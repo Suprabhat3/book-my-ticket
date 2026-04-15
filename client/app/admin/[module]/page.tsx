@@ -1655,6 +1655,11 @@ export default function AdminModulePage() {
                     coupleRows={cpl} 
                     reclinerRows={rec} 
                     totalCols={cols} 
+                    seatTypePrices={{
+                      REGULAR: formState.basePrice,
+                      COUPLE: formState.couplePrice,
+                      RECLINER: formState.reclinerPrice,
+                    }}
                   />
                 </div>
               );

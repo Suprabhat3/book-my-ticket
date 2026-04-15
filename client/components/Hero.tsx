@@ -30,8 +30,8 @@ export const Hero = ({ featuredMovie }: HeroProps) => {
   const movie = featuredMovie || fallbackMovie;
 
   return (
-    <section className="relative mb-24 overflow-hidden rounded-xl h-180 bg-surface-container ring-1 ring-inset ring-white">
-      <div className="absolute inset-0 z-10 bg-linear-to-r from-surface via-surface/40 to-transparent"></div>
+    <section className="relative isolate mb-24 h-180 overflow-hidden rounded-xl bg-surface-container ring-1 ring-inset ring-white">
+      <div className="absolute inset-0 z-10 bg-linear-to-r from-surface via-surface/50 via-35% to-transparent"></div>
       <Image
         alt={movie.title}
         src={
@@ -41,7 +41,7 @@ export const Hero = ({ featuredMovie }: HeroProps) => {
         }
         fill
         sizes="100vw"
-        className="object-fill"
+        className="object-cover mask-[linear-gradient(to_right,transparent_0%,black_18%,black_100%)]"
         priority
       />
 
@@ -49,10 +49,10 @@ export const Hero = ({ featuredMovie }: HeroProps) => {
         <span className="text-primary font-bold tracking-widest text-sm mb-4 inline-block bg-primary/10 px-4 py-1 rounded-full w-fit">
           NOW SHOWING
         </span>
-        <h1 className="text-7xl font-headline font-black text-on-surface leading-tight mb-6">
+        <h1 className="text-7xl font-headline font-black text-gray-800 leading-tight mb-6">
           {movie.title}
         </h1>
-        <p className="text-lg text-on-surface-variant mb-10 leading-relaxed max-w-lg">
+        <p className="text-lg text-gray-700 mb-10 leading-relaxed max-w-lg">
           {movie.description}
         </p>
 

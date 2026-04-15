@@ -37,6 +37,9 @@ const REG_H   = 36;   // px
 const REC_H   = 46;   // px
 const SEAT_GAP = 6;   // px between seats within a section
 const REC_W   = 2 * REG_W + SEAT_GAP; // 86px
+const REGULAR_SEATS_PER_SECTION = 10;
+const RECLINER_SEATS_PER_SECTION = 5;
+const AISLE_GAP = 32;
 
 // ── Claymorphism shadow helpers ───────────────────────────────────────────────
 
@@ -112,6 +115,49 @@ const PALETTE: Record<SeatType, Palette> = {
     legendDot:  "bg-amber-400",
   },
 };
+
+type SeatTypePriceMap = Partial<Record<SeatType, string | number>>;
+
+function formatPriceLabel(value?: string | number): string | null {
+  if (value === undefined || value === null) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return `Rs. ${numeric.toLocaleString("en-IN")}`;
+  }
+  const text = String(value).trim();
+  return text ? text : null;
+}
+
+function buildRegularSections(totalCols: number, maxRenderCols?: number): number[] {
+  const visibleCols = Math.max(0, Math.min(totalCols, maxRenderCols ?? totalCols));
+  if (visibleCols <= 0) return [];
+
+  const sections: number[] = [];
+  for (let remaining = visibleCols; remaining > 0; remaining -= REGULAR_SEATS_PER_SECTION) {
+    sections.push(Math.min(REGULAR_SEATS_PER_SECTION, remaining));
+  }
+  return sections;
+}
+
+function SeatTypeBand({
+  type,
+  price,
+}: {
+  type: SeatType;
+  price?: string | number;
+}) {
+  const priceLabel = formatPriceLabel(price);
+  const labelText = `${PALETTE[type].label.toUpperCase()} ROWS`;
+
+  return (
+    <div className="w-full px-2">
+      <p className="text-center text-xs font-extrabold tracking-[0.06em] text-on-surface-variant uppercase">
+        {priceLabel ? `${priceLabel} ${labelText}` : labelText}
+      </p>
+      <div className="mt-2 h-px w-full bg-surface-container-high" />
+    </div>
+  );
+}
 
 // ── Individual Seat button ────────────────────────────────────────────────────
 
@@ -229,11 +275,12 @@ function PriceLegend({ seats }: { seats: SeatItem[] }) {
 // ── Live / Interactive Layout ─────────────────────────────────────────────────
 
 function LiveSeatLayout({
-  seats, selectedIds, onToggle,
+  seats, selectedIds, onToggle, seatTypePrices,
 }: {
   seats: SeatItem[];
   selectedIds: number[];
   onToggle: (s: SeatItem) => void;
+  seatTypePrices?: SeatTypePriceMap;
 }) {
   const rowMap = new Map<string, SeatItem[]>();
   for (const s of seats) {
@@ -242,47 +289,80 @@ function LiveSeatLayout({
   }
   for (const v of rowMap.values()) v.sort((a, b) => a.screenSeat.seatNumber - b.screenSeat.seatNumber);
 
+  const typeRowBuckets: Record<SeatType, Array<[string, SeatItem[]]>> = {
+    REGULAR: [],
+    COUPLE: [],
+    RECLINER: [],
+  };
+
+  for (const [rowLabel, rowSeats] of rowMap.entries()) {
+    const rowType = rowSeats[0]?.screenSeat.seatType;
+    if (!rowType) continue;
+    typeRowBuckets[rowType].push([rowLabel, rowSeats]);
+  }
+
+  const inferredPriceByType: SeatTypePriceMap = {};
+  for (const t of ["REGULAR", "COUPLE", "RECLINER"] as SeatType[]) {
+    const sampleSeat = seats.find((seat) => seat.screenSeat.seatType === t);
+    if (sampleSeat) inferredPriceByType[t] = sampleSeat.price;
+  }
+
   return (
-    <div className="flex flex-col" style={{ gap: 8 }}>
-      {[...rowMap.entries()].map(([rowLabel, rowSeats]) => {
-        const type      = rowSeats[0]?.screenSeat.seatType ?? "REGULAR";
-        const isRec     = type === "RECLINER";
-        // Regular/Premium: 10 per section | Recliner: 5 per section (= 10 regular slots)
-        const sections  = chunkBy(rowSeats, isRec ? 5 : 10);
-        const rowHeight = isRec ? REC_H : REG_H;
+    <div className="flex flex-col" style={{ gap: 20 }}>
+      {(["REGULAR", "COUPLE", "RECLINER"] as SeatType[]).map((type) => {
+        const rows = typeRowBuckets[type];
+        if (rows.length === 0) return null;
 
         return (
-          <div
-            key={rowLabel}
-            className="flex items-center"
-            style={{ gap: 8 }}
-          >
-            {/* Row label */}
-            <span
-              className="shrink-0 font-bold text-on-surface-variant text-center"
-              style={{ width: 24, fontSize: 11 }}
-            >
-              {rowLabel}
-            </span>
+          <div key={type} className="flex flex-col" style={{ gap: 10 }}>
+            <SeatTypeBand
+              type={type}
+              price={seatTypePrices?.[type] ?? inferredPriceByType[type]}
+            />
 
-            {/* Sections with aisle gap between them */}
-            <div className="flex items-center" style={{ gap: 24 }}>
-              {sections.map((section, si) => (
-                <div
-                  key={si}
-                  className="flex items-end"
-                  style={{ gap: SEAT_GAP, height: rowHeight }}
-                >
-                  {section.map((s) => (
-                    <Seat
-                      key={s.id}
-                      seat={s}
-                      selected={selectedIds.includes(s.id)}
-                      onToggle={onToggle}
-                    />
-                  ))}
-                </div>
-              ))}
+            <div className="flex flex-col" style={{ gap: 8 }}>
+              {rows.map(([rowLabel, rowSeats]) => {
+                const isRec = type === "RECLINER";
+                const sections = chunkBy(
+                  rowSeats,
+                  isRec ? RECLINER_SEATS_PER_SECTION : REGULAR_SEATS_PER_SECTION,
+                );
+                const rowHeight = isRec ? REC_H : REG_H;
+
+                return (
+                  <div
+                    key={rowLabel}
+                    className="flex items-center"
+                    style={{ gap: 8 }}
+                  >
+                    <span
+                      className="shrink-0 font-bold text-on-surface-variant text-center"
+                      style={{ width: 24, fontSize: 11 }}
+                    >
+                      {rowLabel}
+                    </span>
+
+                    <div className="flex items-center" style={{ gap: AISLE_GAP }}>
+                      {sections.map((section, si) => (
+                        <div
+                          key={si}
+                          className="flex items-end"
+                          style={{ gap: SEAT_GAP, height: rowHeight }}
+                        >
+                          {section.map((s) => (
+                            <Seat
+                              key={s.id}
+                              seat={s}
+                              selected={selectedIds.includes(s.id)}
+                              onToggle={onToggle}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -296,9 +376,11 @@ function LiveSeatLayout({
 function StaticPreview({
   regularRows, coupleRows, reclinerRows, totalCols,
   maxRenderRows = 50, maxRenderCols = 50,
+  seatTypePrices,
 }: {
   regularRows: number; coupleRows: number; reclinerRows: number; totalCols: number;
   maxRenderRows?: number; maxRenderCols?: number;
+  seatTypePrices?: SeatTypePriceMap;
 }) {
   const reg  = Math.max(0, regularRows);
   const cpl  = Math.max(0, coupleRows);
@@ -306,15 +388,7 @@ function StaticPreview({
   const cols = Math.max(0, totalCols);
   const cap  = (reg + cpl) * cols + rec * Math.floor(cols / 2);
 
-  const getSections = (total: number) => {
-    const capped  = Math.min(total, maxRenderCols);
-    const count   = Math.max(1, Math.floor(capped / 10));
-    const base    = Math.floor(capped / count);
-    let   rem     = capped % count;
-    return Array.from({ length: count }, () => (rem-- > 0 ? base + 1 : base));
-  };
-
-  const sections  = getSections(cols);
+  const regularSections = buildRegularSections(cols, maxRenderCols);
   const visReg    = Math.min(reg, maxRenderRows);
   const visCpl    = Math.min(cpl, maxRenderRows);
   const visRec    = Math.min(rec, Math.floor(maxRenderRows / 2));
@@ -344,15 +418,14 @@ function StaticPreview({
   );
 
   const Row = ({ type, count, isRec }: { type: SeatType; count: number; isRec?: boolean }) => {
-    const sectionCount = isRec ? Math.floor(count / 2) : count;
-    const secs         = isRec
-      ? getSections(Math.floor(cols / 2)).map((s) => Math.floor(s / 2))
-      : sections;
+    const visibleCols = Math.min(count, maxRenderCols);
+    const secs = regularSections;
+
     return (
-      <div className="flex justify-center items-end" style={{ gap: 24 }}>
+      <div className="flex justify-center items-end" style={{ gap: AISLE_GAP }}>
         {secs.map((sz, si) => (
           <div key={si} className="flex items-end" style={{ gap: SEAT_GAP }}>
-            {Array.from({ length: sz }).map((_, i) => (
+            {Array.from({ length: isRec ? Math.floor(sz / 2) : sz }).map((_, i) => (
               <StaticSeat
                 key={i}
                 type={type}
@@ -360,19 +433,37 @@ function StaticPreview({
                 h={isRec ? REC_H : REG_H}
               />
             ))}
+            {isRec && sz % 2 === 1 ? <div style={{ width: REG_W + SEAT_GAP, height: 1 }} /> : null}
           </div>
         ))}
+        {isRec && visibleCols % 2 === 1 ? <div style={{ width: REG_W, height: 1 }} /> : null}
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col items-center" style={{ gap: 8 }}>
-      {Array.from({ length: visReg }).map((_, r) => <Row key={`r-${r}`} type="REGULAR" count={cols} />)}
-      {visCpl > 0 && visReg > 0 && <div style={{ height: 2 }} />}
-      {Array.from({ length: visCpl }).map((_, r) => <Row key={`c-${r}`} type="COUPLE" count={cols} />)}
-      {visRec > 0 && (visReg > 0 || visCpl > 0) && <div style={{ height: 16 }} />}
-      {Array.from({ length: visRec }).map((_, r) => <Row key={`rec-${r}`} type="RECLINER" count={cols} isRec />)}
+    <div className="flex flex-col items-center" style={{ gap: 20 }}>
+      {visReg > 0 && (
+        <div className="w-full flex flex-col" style={{ gap: 8 }}>
+          <SeatTypeBand type="REGULAR" price={seatTypePrices?.REGULAR} />
+          {Array.from({ length: visReg }).map((_, r) => <Row key={`r-${r}`} type="REGULAR" count={cols} />)}
+        </div>
+      )}
+
+      {visCpl > 0 && (
+        <div className="w-full flex flex-col" style={{ gap: 8 }}>
+          <SeatTypeBand type="COUPLE" price={seatTypePrices?.COUPLE} />
+          {Array.from({ length: visCpl }).map((_, r) => <Row key={`c-${r}`} type="COUPLE" count={cols} />)}
+        </div>
+      )}
+
+      {visRec > 0 && (
+        <div className="w-full flex flex-col" style={{ gap: 8 }}>
+          <SeatTypeBand type="RECLINER" price={seatTypePrices?.RECLINER} />
+          {Array.from({ length: visRec }).map((_, r) => <Row key={`rec-${r}`} type="RECLINER" count={cols} isRec />)}
+        </div>
+      )}
+
       {isCapped && (
         <p className="text-center text-xs text-on-surface-variant mt-4 px-4 py-2 rounded-xl bg-surface-container-high">
           Preview capped. Actual capacity: {cap} seats.
@@ -473,12 +564,13 @@ export interface SeatLayoutPreviewProps {
   seats?: SeatItem[];
   selectedIds?: number[];
   onToggle?: (seat: SeatItem) => void;
+  seatTypePrices?: SeatTypePriceMap;
 }
 
 export function SeatLayoutPreview({
   regularRows = 0, coupleRows = 0, reclinerRows = 0, totalCols = 0,
   maxRenderRows = 50, maxRenderCols = 50,
-  seats, selectedIds = [], onToggle,
+  seats, selectedIds = [], onToggle, seatTypePrices,
 }: SeatLayoutPreviewProps) {
   const isLive = Array.isArray(seats) && seats.length > 0;
 
@@ -495,6 +587,7 @@ export function SeatLayoutPreview({
               seats={seats!}
               selectedIds={selectedIds}
               onToggle={onToggle ?? (() => {})}
+              seatTypePrices={seatTypePrices}
             />
           ) : (
             <StaticPreview
@@ -504,6 +597,7 @@ export function SeatLayoutPreview({
               totalCols={totalCols}
               maxRenderRows={maxRenderRows}
               maxRenderCols={maxRenderCols}
+              seatTypePrices={seatTypePrices}
             />
           )}
         </div>
