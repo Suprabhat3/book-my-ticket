@@ -23,6 +23,7 @@ export const NavBar = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Search state
   const [query, setQuery] = useState("");
@@ -124,10 +125,21 @@ export const NavBar = () => {
   };
 
   return (
-    <nav className="sticky top-0 z-50 w-full bg-surface/70 backdrop-blur-xl transition-all duration-300">
-      <div className="flex justify-between items-center px-8 py-4 max-w-screen-2xl mx-auto">
-        <div className="text-2xl font-black text-primary italic font-headline tracking-tight">
-          Book Suprabhat&apos;s Ticket
+    <nav className="sticky top-0 z-50 w-full bg-surface/70 backdrop-blur-xl transition-all duration-300 border-b border-white/5">
+      <div className="flex justify-between items-center px-4 md:px-8 py-3 md:py-4 max-w-screen-2xl mx-auto gap-2">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden p-2 -ml-2 text-on-surface hover:text-primary transition-colors flex items-center justify-center rounded-full active:bg-white/10"
+            aria-label="Toggle Navigation Menu"
+          >
+            <span className="material-symbols-outlined text-2xl">
+              {isMobileMenuOpen ? "close" : "menu"}
+            </span>
+          </button>
+          <Link href="/" className="text-base sm:text-2xl font-black text-primary italic font-headline tracking-tight truncate p-2">
+            Book Suprabhat&apos;s Ticket
+          </Link>
         </div>
 
         <div className="hidden md:flex items-center gap-10">
@@ -324,6 +336,38 @@ export const NavBar = () => {
           </div>
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden absolute top-full left-0 w-full bg-surface/95 backdrop-blur-xl border-t border-white/10 shadow-2xl animate-in slide-in-from-top-2 flex flex-col h-screen overflow-hidden">
+          <div className="flex flex-col px-4 py-6 gap-2">
+            <Link
+              href="/"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="text-on-surface font-headline font-bold text-lg p-4 hover:bg-surface-container rounded-2xl flex items-center gap-4 transition-all"
+            >
+              <span className="material-symbols-outlined text-2xl">movie</span>
+              Movies
+            </Link>
+            <Link
+              href="/theaters"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="text-on-surface font-headline font-bold text-lg p-4 hover:bg-surface-container rounded-2xl flex items-center gap-4 transition-all"
+            >
+              <span className="material-symbols-outlined text-2xl">theaters</span>
+              Cinemas
+            </Link>
+            <Link
+              href="/bookings"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="text-on-surface font-headline font-bold text-lg p-4 hover:bg-surface-container rounded-2xl flex items-center gap-4 transition-all"
+            >
+              <span className="material-symbols-outlined text-2xl">confirmation_number</span>
+              My Bookings
+            </Link>
+          </div>
+        </div>
+      )}
     </nav>
   );
 };

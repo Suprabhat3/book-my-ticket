@@ -30,8 +30,10 @@ export const Hero = ({ featuredMovie }: HeroProps) => {
   const movie = featuredMovie || fallbackMovie;
 
   return (
-    <section className="relative isolate mb-24 h-180 overflow-hidden rounded-xl bg-surface-container ring-1 ring-inset ring-white">
-      <div className="absolute inset-0 z-10 bg-linear-to-r from-surface via-surface/50 via-35% to-transparent"></div>
+    <section className="relative isolate mb-12 md:mb-24 h-150 md:h-180 overflow-hidden rounded-xl bg-surface-container ring-1 ring-inset ring-white">
+      <div className="absolute inset-0 z-10 bg-linear-to-t from-surface via-surface/80 to-transparent md:bg-linear-to-r md:from-surface md:via-surface/50 md:via-35% md:to-transparent"></div>
+      
+      {/* Desktop Image */}
       <Image
         alt={movie.title}
         src={
@@ -41,25 +43,39 @@ export const Hero = ({ featuredMovie }: HeroProps) => {
         }
         fill
         sizes="100vw"
-        className="object-cover mask-[linear-gradient(to_right,transparent_0%,black_18%,black_100%)]"
+        className="hidden md:block object-cover mask-[linear-gradient(to_right,transparent_0%,black_18%,black_100%)]"
         priority
       />
 
-      <div className="relative z-20 h-full flex flex-col justify-center px-12 max-w-2xl">
-        <span className="text-primary font-bold tracking-widest text-sm mb-4 inline-block bg-primary/10 px-4 py-1 rounded-full w-fit">
+      {/* Mobile Image */}
+      <Image
+        alt={movie.title}
+        src={
+          movie.posterVerticalUrl ||
+          fallbackMovie.posterVerticalUrl ||
+          "/placeholder.png"
+        }
+        fill
+        sizes="100vw"
+        className="block md:hidden object-cover mask-[linear-gradient(to_top,transparent_0%,black_20%,black_100%)] object-top"
+        priority
+      />
+
+      <div className="relative z-20 h-full flex flex-col justify-end md:justify-center px-6 pb-12 md:px-12 md:pb-0 max-w-2xl">
+        <span className="text-primary font-bold tracking-widest text-xs md:text-sm mb-4 inline-block bg-primary/10 px-4 py-1 rounded-full w-fit">
           NOW SHOWING
         </span>
-        <h1 className="text-7xl font-headline font-black text-gray-800 leading-tight mb-6">
+        <h1 className="text-5xl md:text-7xl font-headline font-black text-gray-800 leading-tight mb-4 md:mb-6">
           {movie.title}
         </h1>
-        <p className="text-lg text-gray-700 mb-10 leading-relaxed max-w-lg">
+        <p className="text-base md:text-lg text-gray-700 mb-8 md:mb-10 leading-relaxed max-w-lg">
           {movie.description}
         </p>
 
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 md:gap-6">
           {movie.id ? (
-            <Link href={`/movies/${movie.id}`}>
-              <Button variant="primary">
+            <Link href={`/movies/${movie.id}`} className="w-full sm:w-auto">
+              <Button variant="primary" className="w-full sm:w-auto justify-center">
                 <span className="material-symbols-outlined">
                   confirmation_number
                 </span>
@@ -67,15 +83,15 @@ export const Hero = ({ featuredMovie }: HeroProps) => {
               </Button>
             </Link>
           ) : (
-            <Button variant="primary" disabled>
+            <Button variant="primary" disabled className="w-full sm:w-auto justify-center">
               <span className="material-symbols-outlined">
                 confirmation_number
               </span>
               Bookings Open Soon
             </Button>
           )}
-          <Link href="/bookings">
-            <Button variant="secondary">
+          <Link href="/bookings" className="w-full sm:w-auto">
+            <Button variant="secondary" className="w-full sm:w-auto justify-center">
               <span className="material-symbols-outlined">movie</span>
               My Bookings
             </Button>
