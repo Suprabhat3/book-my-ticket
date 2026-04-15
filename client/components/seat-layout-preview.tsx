@@ -104,15 +104,15 @@ const PALETTE: Record<SeatType, Palette> = {
   },
   RECLINER: {
     label: "Recliner",
-    availBg:    "linear-gradient(145deg, #fffbeb 0%, #fde68a 100%)",
-    availText:  "#78350f",
+    availBg:    "linear-gradient(145deg, #ecfeff 0%, #a5f3fc 100%)",
+    availText:  "#155e75",
     selBg:      "linear-gradient(145deg, #dc2626 0%, #b7131a 100%)",
     selText:    "#fff",
     lockedBg:   "linear-gradient(145deg, #fefce8 0%, #fef08a 100%)",
     lockedText: "#713f12",
     bookedBg:   "linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%)",
     bookedText: "#94a3b8",
-    legendDot:  "bg-amber-400",
+    legendDot:  "bg-cyan-400",
   },
 };
 
@@ -171,6 +171,7 @@ function Seat({
   const pal      = PALETTE[seat.screenSeat.seatType];
   const isRec    = seat.screenSeat.seatType === "RECLINER";
   const isOwnedLock = seat.status === "LOCKED" && seat.isLockedByCurrentUser;
+  const isSelectedOrOwned = selected || isOwnedLock;
   const disabled = seat.status === "BOOKED" || (seat.status === "LOCKED" && !isOwnedLock);
 
   const w = isRec ? REC_W : REG_W;
@@ -185,10 +186,10 @@ function Seat({
   if (seat.status === "BOOKED") {
     bg = pal.bookedBg; color = pal.bookedText; shadow = CLAY_PRESSED; cursor = "not-allowed";
     extra = "opacity-60 line-through";
+  } else if (isSelectedOrOwned) {
+    bg = pal.selBg; color = pal.selText; shadow = CLAY_SELECTED; cursor = "pointer";
   } else if (seat.status === "LOCKED") {
     bg = pal.lockedBg; color = pal.lockedText; shadow = CLAY_PRESSED; cursor = "not-allowed";
-  } else if (selected) {
-    bg = pal.selBg; color = pal.selText; shadow = CLAY_SELECTED; cursor = "pointer";
   } else {
     bg = pal.availBg; color = pal.availText; shadow = CLAY_UP; cursor = "pointer";
   }
@@ -201,8 +202,8 @@ function Seat({
       title={`${seat.screenSeat.seatLabel} · ${pal.label} · Rs. ${Number(seat.price).toLocaleString("en-IN")}${seat.status !== "AVAILABLE" ? ` (${seat.status})` : ""}`}
       className={`inline-flex items-center justify-center font-mono font-bold select-none
         transition-transform duration-150 active:scale-95
-        ${!disabled && !selected ? "hover:scale-105 hover:-translate-y-0.5" : ""}
-        ${selected ? "scale-105 -translate-y-0.5" : ""}
+        ${!disabled && !isSelectedOrOwned ? "hover:scale-105 hover:-translate-y-0.5" : ""}
+        ${isSelectedOrOwned ? "scale-105 -translate-y-0.5" : ""}
         ${extra}`}
       style={{
         width: w,

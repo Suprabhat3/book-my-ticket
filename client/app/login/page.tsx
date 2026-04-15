@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/Input";
 import { ApiError, loginUser } from "@/lib/api";
 import { saveAuthSession } from "@/lib/auth-storage";
 
+function sanitizeRedirectPath(path: string | null) {
+  if (!path) return null;
+  if (!path.startsWith("/")) return null;
+  if (path.startsWith("//")) return null;
+  return path;
+}
+
 export default function LoginPage() {
   return (
     <Suspense fallback={<LoginPageLoading />}>
@@ -51,8 +58,9 @@ function LoginPageContent() {
       });
 
       saveAuthSession(data.accessToken, data.user);
-      const nextPath = searchParams.get("next");
-      router.push(nextPath || "/");
+      const callbackUrl = sanitizeRedirectPath(searchParams.get("callbackUrl"));
+      const nextPath = sanitizeRedirectPath(searchParams.get("next"));
+      router.push(callbackUrl || nextPath || "/");
     } catch (submitError) {
       const message =
         submitError instanceof ApiError ? submitError.message : "Unable to login right now.";

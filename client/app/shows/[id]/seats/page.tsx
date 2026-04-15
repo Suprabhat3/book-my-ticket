@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { NavBar } from "@/components/NavBar";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SeatLayoutPreview, SeatItem } from "@/components/seat-layout-preview";
 import { getAccessToken } from "@/lib/auth-storage";
 import {
@@ -29,6 +30,7 @@ function formatDateTime(value: string) {
 export default function ShowSeatsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const showId = Number(params.id);
 
   const [show, setShow] = useState<PublicShowSeatMap | null>(null);
@@ -36,11 +38,27 @@ export default function ShowSeatsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSeatIds, setSelectedSeatIds] = useState<number[]>([]);
   const [isUpdatingSeat, setIsUpdatingSeat] = useState(false);
+  const [isLoginPromptOpen, setIsLoginPromptOpen] = useState(false);
+  const [loginPromptReason, setLoginPromptReason] = useState<"seatSelection" | "checkout">(
+    "seatSelection",
+  );
   const selectedSeatIdsRef = useRef<number[]>([]);
+  const hasRestoredSelectionRef = useRef(false);
 
   useEffect(() => {
     selectedSeatIdsRef.current = selectedSeatIds;
   }, [selectedSeatIds]);
+
+  useEffect(() => {
+    hasRestoredSelectionRef.current = false;
+  }, [showId]);
+
+  const querySeatIds = useMemo(() => {
+    return (searchParams.get("seatIds") || "")
+      .split(",")
+      .map((id) => Number(id.trim()))
+      .filter((id) => Number.isFinite(id) && id > 0);
+  }, [searchParams]);
 
   const loadSeatMap = async (withLoading = false) => {
     if (!Number.isFinite(showId) || showId <= 0) {
@@ -120,23 +138,54 @@ export default function ShowSeatsPage() {
     return show.seats.filter((seat) => selectedSeatIds.includes(seat.id));
   }, [show, selectedSeatIds]);
 
+  useEffect(() => {
+    if (!show || hasRestoredSelectionRef.current) return;
+    if (!getAccessToken()) return;
+
+    hasRestoredSelectionRef.current = true;
+    if (querySeatIds.length === 0) return;
+
+    const restorableSeatIds = querySeatIds.filter((seatId) => {
+      const seat = show.seats.find((candidate) => candidate.id === seatId);
+      if (!seat) return false;
+      if (seat.status === "BOOKED") return false;
+      if (seat.status === "LOCKED" && !seat.isLockedByCurrentUser) return false;
+      return true;
+    });
+
+    if (restorableSeatIds.length === 0) return;
+    setSelectedSeatIds((prev) => Array.from(new Set([...prev, ...restorableSeatIds])));
+  }, [show, querySeatIds]);
+
+  useEffect(() => {
+    if (!show || selectedSeatIds.length === 0) return;
+    if (searchParams.get("autoCheckout") !== "1") return;
+    if (!getAccessToken()) return;
+
+    const query = new URLSearchParams({
+      showId: String(show.id),
+      seatIds: selectedSeatIds.join(","),
+    });
+    router.replace(`/checkout?${query.toString()}`);
+  }, [show, selectedSeatIds, searchParams, router]);
+
   const totalAmount = selectedSeats.reduce((sum, seat) => sum + Number(seat.price), 0);
 
   const onToggleSeat = async (seat: SeatItem) => {
     if (!show || isUpdatingSeat) return;
 
     const accessToken = getAccessToken();
-    if (!accessToken) {
-      const nextPath = `/shows/${show.id}/seats`;
-      router.push(`/login?next=${encodeURIComponent(nextPath)}`);
-      return;
-    }
-
     const isSelected = selectedSeatIds.includes(seat.id);
     const canToggleAvailable = seat.status === "AVAILABLE";
     const canToggleMyLock = seat.status === "LOCKED" && seat.isLockedByCurrentUser;
 
-    if (!isSelected && !canToggleAvailable && !canToggleMyLock) {
+    if (!isSelected && !canToggleAvailable && (accessToken ? !canToggleMyLock : true)) {
+      return;
+    }
+
+    if (!accessToken) {
+      setLoginPromptReason("seatSelection");
+      setIsLoginPromptOpen(true);
       return;
     }
 
@@ -161,8 +210,8 @@ export default function ShowSeatsPage() {
       await loadSeatMap(false);
     } catch (toggleError) {
       if (toggleError instanceof UserApiError && toggleError.statusCode === 401) {
-        const nextPath = `/shows/${show.id}/seats`;
-        router.push(`/login?next=${encodeURIComponent(nextPath)}`);
+        setLoginPromptReason("seatSelection");
+        setIsLoginPromptOpen(true);
         return;
       }
 
@@ -187,11 +236,42 @@ export default function ShowSeatsPage() {
 
   const goToCheckout = () => {
     if (!show || selectedSeatIds.length === 0) return;
+
+    const accessToken = getAccessToken();
+    if (!accessToken) {
+      setLoginPromptReason("checkout");
+      setIsLoginPromptOpen(true);
+      return;
+    }
+
     const query = new URLSearchParams({
       showId: String(show.id),
       seatIds: selectedSeatIds.join(","),
     });
     router.push(`/checkout?${query.toString()}`);
+  };
+
+  const goToLoginFromPrompt = () => {
+    if (!show) {
+      setIsLoginPromptOpen(false);
+      return;
+    }
+
+    const callbackQuery = new URLSearchParams();
+    if (selectedSeatIds.length > 0) {
+      callbackQuery.set("seatIds", selectedSeatIds.join(","));
+    }
+    if (loginPromptReason === "checkout" && selectedSeatIds.length > 0) {
+      callbackQuery.set("autoCheckout", "1");
+    }
+    const callbackPath = callbackQuery.toString()
+      ? `/shows/${show.id}/seats?${callbackQuery.toString()}`
+      : `/shows/${show.id}/seats`;
+
+    setIsLoginPromptOpen(false);
+    router.push(
+      `/login?callbackUrl=${encodeURIComponent(callbackPath)}&next=${encodeURIComponent(callbackPath)}`,
+    );
   };
 
   return (
@@ -258,6 +338,24 @@ export default function ShowSeatsPage() {
           </>
         )}
       </main>
+
+      <ConfirmDialog
+        open={isLoginPromptOpen}
+        title={
+          loginPromptReason === "seatSelection"
+            ? "Login required to select seats"
+            : "Login required to continue"
+        }
+        description={
+          loginPromptReason === "seatSelection"
+            ? "Seat hold requires your account so we can reserve the selected seat for you. Please log in to continue."
+            : "You need to log in before checkout so we can secure your booking and payment details."
+        }
+        cancelLabel="Not now"
+        confirmLabel="Log in now"
+        onCancel={() => setIsLoginPromptOpen(false)}
+        onConfirm={goToLoginFromPrompt}
+      />
 
       <Footer />
     </div>
